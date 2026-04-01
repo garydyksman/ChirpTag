@@ -1,0 +1,35 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37111.16 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{11A8DD76-328B-46DF-9F39-F559912D0360}") = "ChirpTag", "ChirpTag\ChirpTag.nfproj", "{56D554F5-B77F-4BAF-9670-862A300A2010}"
+EndProject
+Project("{11A8DD76-328B-46DF-9F39-F559912D0360}") = "LoRaLib", "LoRaLib\LoRaLib.nfproj", "{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{56D554F5-B77F-4BAF-9670-862A300A2010}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{56D554F5-B77F-4BAF-9670-862A300A2010}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{56D554F5-B77F-4BAF-9670-862A300A2010}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{56D554F5-B77F-4BAF-9670-862A300A2010}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{56D554F5-B77F-4BAF-9670-862A300A2010}.Release|Any CPU.Build.0 = Release|Any CPU
+		{56D554F5-B77F-4BAF-9670-862A300A2010}.Release|Any CPU.Deploy.0 = Release|Any CPU
+		{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{062EABF0-FBCC-408D-9D5E-14D8471E1F8F}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6B8A59F6-A5D3-4387-80C7-AF816E96DD4A}
+	EndGlobalSection
+EndGlobal
