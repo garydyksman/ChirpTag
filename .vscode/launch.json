@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "nanoFramework: Launch and Debug",
+      "type": "nanoframework",
+      "request": "launch",
+      "program": "${workspaceFolder}/${workspaceFolderBasename}/bin/Debug",
+      "device": "",
+      "stopOnEntry": true,
+      "deployAssemblies": true,
+      "verbosity": "none"
+    }
+  ]
+}
