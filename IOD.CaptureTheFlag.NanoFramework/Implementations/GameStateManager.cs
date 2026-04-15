@@ -294,6 +294,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             };
         }
 
+        public string GetPlayerName(byte deviceId)
+        {
+            string name = _playerNames[deviceId];
+            return name ?? $"0x{deviceId:X2}";
+        }
+
         // ---------------------------------------------------------------
         // CycleTargets — wraps selection index
         // ---------------------------------------------------------------

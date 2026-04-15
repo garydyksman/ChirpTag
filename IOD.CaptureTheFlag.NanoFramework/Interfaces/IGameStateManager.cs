@@ -60,6 +60,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         PeerInfo[] GetNearbyPeers(out int count);
 
         PeerInfo GetSelectedTarget();
+        string GetPlayerName(byte deviceId);
         void CycleTargets();
 
         /// <summary>

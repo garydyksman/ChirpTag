@@ -461,8 +461,21 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 return;
             }
 
+            _combatTargetDeviceId = fromDeviceId;
+            _combatTarget = _state.GetPlayerName(fromDeviceId);
+            _combatResolved = false;
+            _combatPending = true;
+            _uiMode = UiMode.Combat;
+            Log($"OnAttackReceived enter combat uiMode={_uiMode} target=0x{fromDeviceId:X2} name={_combatTarget}");
+
+            _display.ShowCombat(_combatTarget, _state.CombatScore);
+            MarkDisplayActivity("combat-defend");
+
             Log($"OnAttackReceived queue AttackAck score={_state.CombatScore}");
             QueuePacket(_builder.AttackAck(DeviceId, fromDeviceId, _state.CombatScore));
+
+            Log("OnAttackReceived starting CombatTimeoutLoop thread");
+            new Thread(CombatTimeoutLoop).Start();
         }
 
         public void OnAttackAckReceived(byte fromDeviceId, byte theirScore)
@@ -552,7 +565,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _state.TakeDamage();
             _uiMode = UiMode.CombatResult;
             Log($"OnCombatResultReceived ShowCombatResult uiMode={_uiMode} lives={_state.Lives} state={_state.State}");
-            _display.ShowCombatResult(false, null);
+            _display.ShowCombatResult(false, _combatTarget);
             MarkDisplayActivity("combat-result-rx");
 
             new Thread(() =>
