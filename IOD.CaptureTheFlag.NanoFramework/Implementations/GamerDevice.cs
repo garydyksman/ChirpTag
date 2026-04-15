@@ -333,8 +333,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 return;
             }
 
-            _display.Clear();
-
             Log($"Attack target deviceId=0x{target.DeviceId:X2} name={target.PlayerName} lastSeen={target.LastSeenAt}");
             _combatTarget = target.PlayerName;
             _combatTargetDeviceId = target.DeviceId;

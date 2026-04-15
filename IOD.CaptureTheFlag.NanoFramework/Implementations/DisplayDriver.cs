@@ -119,10 +119,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_lock)
             {
                 Log($"Clear begin mode={_screenMode}");
-                PowerCycleDisplayUnsafe("Clear");
-                _display.Clear(triggerPageRefresh: true);
-                WaitDisplayReadyUnsafe();
-                _screenMode = ScreenMode.Message;
+                BeginFullFrameUnsafe(ScreenMode.Message, false, "Clear");
+                CommitFullRefreshUnsafe("Clear");
                 Log($"Clear end mode={_screenMode}");
             }
         }
@@ -133,7 +131,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Log($"ShowMessage begin mode={_screenMode} line1={line1} line2={line2}");
 
-                BeginFullRefreshUnsafe(ScreenMode.Message, false, "ShowMessage");
+                BeginFullFrameUnsafe(ScreenMode.Message, false, "ShowMessage");
 
                 Log("ShowMessage draw line1");
                 _graphics.DrawText(line1, _font, 10, 40, Color.Black);
@@ -143,7 +141,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     _graphics.DrawText(line2, _font, 10, 56, Color.Black);
                 }
 
-                EndFullRefreshUnsafe("ShowMessage");
+                CommitFullRefreshUnsafe("ShowMessage");
                 Log($"ShowMessage end mode={_screenMode}");
             }
         }
@@ -216,7 +214,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Log($"ShowCombatResult begin mode={_screenMode} won={won} target={targetName}");
 
-                BeginFullRefreshUnsafe(ScreenMode.CombatResult, false, "ShowCombatResult");
+                BeginFullFrameUnsafe(ScreenMode.CombatResult, false, "ShowCombatResult");
 
                 string line1 = won ? "VICTORY!" : "DEFEATED";
                 string line2 = targetName != null
@@ -232,7 +230,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     _graphics.DrawText(line2, _font, CentreX(line2.Length), 60, Color.Black);
                 }
 
-                EndFullRefreshUnsafe("ShowCombatResult");
+                CommitFullRefreshUnsafe("ShowCombatResult");
                 Log($"ShowCombatResult end mode={_screenMode}");
             }
         }
@@ -243,7 +241,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Log($"ShowDead begin mode={_screenMode} lives={lives}");
 
-                BeginFullRefreshUnsafe(ScreenMode.Dead, true, "ShowDead");
+                BeginFullFrameUnsafe(ScreenMode.Dead, true, "ShowDead");
 
                 int skullX = (_graphics.Width - SkullW) / 2;
                 int skullY = 12;
@@ -257,7 +255,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 Log($"ShowDead draw livesText={livesText}");
                 _graphics.DrawText(livesText, _font, CentreX(livesText.Length), skullY + SkullH + 24, Color.White);
 
-                EndFullRefreshUnsafe("ShowDead");
+                CommitFullRefreshUnsafe("ShowDead");
                 Log($"ShowDead end mode={_screenMode}");
             }
         }
@@ -428,18 +426,23 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log($"PowerCycleDisplayUnsafe end reason={reason}");
         }
 
-        private void BeginFullRefreshUnsafe(ScreenMode nextMode, bool inverted, string reason)
+        private void BeginFullFrameUnsafe(ScreenMode nextMode, bool inverted, string reason, bool powerCycleBeforeDraw = true)
         {
-            Log($"BeginFullRefreshUnsafe {_screenMode}->{nextMode} reason={reason}");
-            PowerCycleDisplayUnsafe(reason);
-            Log($"BeginFullRefreshUnsafe {_screenMode}->{nextMode} reason={reason} Clear begin");
-            _display.Clear(triggerPageRefresh: true);
-            WaitDisplayReadyUnsafe();
-            Log("BeginFullRefreshUnsafe Clear end");
-            Log($"BeginFullRefreshUnsafe {reason} BeginFrameDraw");
+            Log($"BeginFullFrameUnsafe {_screenMode}->{nextMode} reason={reason}");
+
+            if (powerCycleBeforeDraw)
+            {
+                PowerCycleDisplayUnsafe(reason);
+            }
+            else
+            {
+                WaitDisplayReadyUnsafe();
+            }
+
+            Log($"BeginFullFrameUnsafe {reason} BeginFrameDraw");
             _display.BeginFrameDraw();
             _screenMode = nextMode;
-            Log($"BeginFullRefreshUnsafe mode set={_screenMode}");
+            Log($"BeginFullFrameUnsafe mode set={_screenMode}");
 
             if (inverted)
                 ClearScreenBlackUnsafe();
@@ -447,21 +450,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 ClearScreenUnsafe();
         }
 
-        private void EndFullRefreshUnsafe(string reason)
+        private void CommitFullRefreshUnsafe(string reason)
         {
-            Log($"EndFullRefreshUnsafe {reason} EndFrameDraw");
-            _display.EndFrameDraw();
-        }
-
-        /// <summary>
-        /// After HUD partial updates, ending the frame alone may not run the panel full refresh waveform.
-        /// Combat needs a clean screen, so we end the frame then call PerformFullRefresh on the driver.
-        /// </summary>
-        private void EndCombatFullRefreshUnsafe(string reason)
-        {
-            Log($"EndCombatFullRefreshUnsafe {reason} EndFrameDraw");
-            _display.EndFrameDraw();
-            Log($"EndCombatFullRefreshUnsafe {reason} PerformFullRefresh");
+            Log($"CommitFullRefreshUnsafe {reason} Flush");
+            _display.Flush();
+            Log($"CommitFullRefreshUnsafe {reason} PerformFullRefresh");
             _display.PerformFullRefresh();
             WaitDisplayReadyUnsafe();
         }
@@ -495,7 +488,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         private void RenderHudFrameUnsafe(HudData data, string[] targets, int count, int selectedIndex)
         {
-            BeginFullRefreshUnsafe(ScreenMode.Hud, false, "RenderHud");
+            BeginFullFrameUnsafe(ScreenMode.Hud, false, "RenderHud");
 
             Log("RenderHudFrameUnsafe draw divider");
             _graphics.DrawLine(DividerX, 0, DividerX, _graphics.Height, Color.Black);
@@ -515,7 +508,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log($"RenderHudFrameUnsafe draw targets count={count} selected={selectedIndex}");
             DrawCombatListUnsafe(targets, count, selectedIndex);
 
-            EndFullRefreshUnsafe("RenderHud");
+            CommitFullRefreshUnsafe("RenderHud");
         }
 
         private void RenderCombatFrameUnsafe(string targetName, byte myScore, int second, int totalSeconds, bool powerCycleBeforeDraw = true)
@@ -523,24 +516,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (targetName == null)
                 targetName = string.Empty;
 
-            // Do not use Clear(true)+BeginFrameDraw here: after HUD partial refreshes the controller
-            // can still be busy; power-cycle for a known idle state, then build the frame and finish
-            // with an explicit full waveform.
-            if (powerCycleBeforeDraw)
-            {
-                Log("RenderCombatFrameUnsafe power-cycle before draw");
-                PowerCycleDisplayUnsafe("RenderCombat");
-            }
-            else
-            {
-                Log("RenderCombatFrameUnsafe wait panel (no power cycle)");
-                WaitDisplayReadyUnsafe();
-            }
-
-            Log("RenderCombatFrameUnsafe BeginFrameDraw");
-            _display.BeginFrameDraw();
-            _screenMode = ScreenMode.Combat;
-            ClearScreenUnsafe();
+            BeginFullFrameUnsafe(ScreenMode.Combat, false, "RenderCombat", powerCycleBeforeDraw);
 
             int swordX = (_graphics.Width - SwordW) / 2;
             Log($"RenderCombatFrameUnsafe draw sword x={swordX}");
@@ -563,7 +539,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log("RenderCombatFrameUnsafe draw bar");
             DrawBarUnsafe(second, totalSeconds);
 
-            EndCombatFullRefreshUnsafe("RenderCombat");
+            CommitFullRefreshUnsafe("RenderCombat");
         }
 
         private void DrawCombatListUnsafe(string[] targets, int count, int selectedIndex)
