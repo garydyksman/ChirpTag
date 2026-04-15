@@ -2,14 +2,12 @@
 {
     public interface IGamerDevice : IGameDevice
     {
-        byte CombatNumber { get; }
+        byte CombatScore { get; }
         bool HasKey { get; }
         byte[] CarriedKey { get; }   // null if not carrying
 
         // ---- LoRa TX ----
         void SendHeartbeat();
-        void Attack(byte targetDeviceId);
-        void AttackAck(byte targetDeviceId);
         void SendFlagTransfer(byte targetDeviceId, byte[] key);
         void SendCapture(byte flagNodeId);
         void SendDeliver(byte flagNodeId, byte[] key);
@@ -30,5 +28,9 @@
         void EnterCapturing(byte flagNodeId);
         void EnterDelivering(byte flagNodeId);
         void EnterActive();
+
+        // ---- UI events ----
+        void Attack();
+        void CycleTargets();
     }
 }

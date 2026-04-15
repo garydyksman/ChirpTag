@@ -2,9 +2,10 @@
 {
     public interface IPacketBuilder
     {
-        IPacket Heartbeat(byte deviceId, bool hasKey);
+        IPacket Heartbeat(byte deviceId);
         IPacket Attack(byte deviceId, byte targetId);
-        IPacket AttackAck(byte deviceId, byte targetId, byte combatNumber);
+        IPacket AttackAck(byte deviceId, byte targetId, byte combatScore);
+        IPacket CombatResult(byte deviceId, byte targetId, byte winnerId);
         IPacket FlagTransfer(byte deviceId, byte targetId, byte[] key);
         IPacket Capture(byte deviceId, byte flagNodeId);
         IPacket KeyGrant(byte flagNodeId, byte targetId, byte[] key);

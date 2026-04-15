@@ -1,16 +1,16 @@
+using IOD.CaptureTheFlag.NanoFramework.Enum;
+using IOD.CaptureTheFlag.NanoFramework.Implementations;
+using IOD.CaptureTheFlag.NanoFramework.Interfaces;
+using IOD.CaptureTheFlag.NanoFramework.Types;
 using Iot.Device.EPaper;
-using Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13;
+using Iot.Device.EPaper.Drivers.LcmEn2r13;
 using Iot.Device.EPaper.Enums;
 using Iot.Device.EPaper.Fonts;
-using Iot.Device.LoRa;
 using Iot.Device.LoRa.Drivers.Sx1262;
 using nanoFramework.Hardware.Esp32;
 using System;
 using System.Device.Gpio;
 using System.Device.Spi;
-using System.Diagnostics;
-using System.Drawing;
-using System.Text;
 using System.Threading;
 
 namespace ChirpTag
@@ -20,7 +20,6 @@ namespace ChirpTag
         // ---- Display pin mapping (HT-VME213) — SPI2 ----
         private const int PinDisplayMosi = 6;
         private const int PinDisplayClk = 4;
-        private const int PinDisplayMiso = 7;
         private const int PinDisplayCs = 5;
         private const int PinDisplayDc = 2;
         private const int PinDisplayRst = 3;
@@ -36,36 +35,43 @@ namespace ChirpTag
         private const int PinLoraBusy = 13;
         private const int PinLoraDio1 = 14;
 
-        // ---- User button ----
+        // ---- buttons ----
         private const int PinUserButton = 21;   // PRG button, active low
+        private const int PinBootButton = 0;   // BOOT button, active low
 
-        // ---- Shared state ----
+        private static IGamerDevice _device;
         private static LcmEn2r13 _display;
-        private static Graphics _gfx;
-        private static Font8x12 _font;
-        private static Sx1262 _lora;
+        private static bool _attackRequested;
+        private static bool _cycleTargetsRequested;
 
-        private static string _lastRx = "No RX yet";
-        private static int _txCount = 0;
-        private static string _statusMsg = "Ready";
+        private static string _playerName = "Sarah";
 
-        // Set by the button ISR, consumed by the main thread
-        private static bool _sendRequested = false;
+        private static void Log(string message)
+        {
+            DebugLog.Write(message);
+        }
 
         public static void Main()
         {
+            Log("[Program] Main start");
+            Log("[Program] Create GPIO controller");
             var gpio = new GpioController();
 
             // ---- VEXT ----
+            Log("[Program] Configure VEXT");
             gpio.OpenPin(PinVext, PinMode.Output);
             gpio.Write(PinVext, PinValue.High);
             Thread.Sleep(100);
-            Debug.WriteLine("VEXT on");
+            Log("VEXT on");
+
+            // Free GPIO1 for E-Ink BUSY by moving COM1 to the board UART pins.
+            Configuration.SetPinFunction(43, DeviceFunction.COM1_TX);
+            Configuration.SetPinFunction(44, DeviceFunction.COM1_RX);
 
             // ---- Display ----
+            Log("[Program] Configure display pins");
             Configuration.SetPinFunction(PinDisplayMosi, DeviceFunction.SPI2_MOSI);
             Configuration.SetPinFunction(PinDisplayClk, DeviceFunction.SPI2_CLOCK);
-            Configuration.SetPinFunction(PinDisplayMiso, DeviceFunction.SPI2_MISO);
 
             var displaySpi = SpiDevice.Create(new SpiConnectionSettings(2, PinDisplayCs)
             {
@@ -76,6 +82,7 @@ namespace ChirpTag
                 DataFlow = DataFlow.MsbFirst
             });
 
+            Log("[Program] Create display driver instance");
             _display = new LcmEn2r13(
                 displaySpi,
                 resetPin: PinDisplayRst,
@@ -84,17 +91,20 @@ namespace ChirpTag
                 gpioController: gpio,
                 shouldDispose: false);
 
+            Log("[Program] Display PowerOn");
             _display.PowerOn();
-            _display.Clear(triggerPageRefresh: true);
+            Log("[Program] Display Clear");
+            _display.Clear(false);
 
-            _font = new Font8x12();
-            _gfx = new Graphics(_display)
+            var font = new Font8x12();
+            var gfx = new Graphics(_display)
             {
                 DisplayRotation = Rotation.Degrees90Clockwise,
                 FlipGlyphsHorizontally = true
             };
 
             // ---- LoRa ----
+            Log("[Program] Configure LoRa pins");
             Configuration.SetPinFunction(PinLoraMosi, DeviceFunction.SPI1_MOSI);
             Configuration.SetPinFunction(PinLoraClk, DeviceFunction.SPI1_CLOCK);
             Configuration.SetPinFunction(PinLoraMiso, DeviceFunction.SPI1_MISO);
@@ -106,7 +116,8 @@ namespace ChirpTag
                 DataBitLength = 8
             });
 
-            _lora = new Sx1262(
+            Log("[Program] Create LoRa driver instance");
+            var lora = new Sx1262(
                 loraSpi,
                 resetPin: PinLoraRst,
                 busyPin: PinLoraBusy,
@@ -114,29 +125,124 @@ namespace ChirpTag
                 gpioController: gpio,
                 shouldDispose: false);
 
-            _lora.Reset();
-            _lora.Initialise();
+            Log("[Program] LoRa Reset");
+            lora.Reset();
+            Log("[Program] LoRa Initialise");
+            lora.Initialise();
 
-            _lora.PacketReceived += OnPacketReceived;
-            _lora.StartPolling();
+            // ---- Init Display Driver ----
+            Log("[Program] Create game display driver");
+            var driver = new DisplayDriver(_display, gfx, font);
+
+            // ---- Init HttpServiceClient ----
+            Log("[Program] Create game HTTP client");
+            IGameHttpClient http = new MockGameHttpClient();
 
             // ---- User button ----
+            Log("[Program] Configure user button");
             var buttonPin = gpio.OpenPin(PinUserButton, PinMode.InputPullUp);
             buttonPin.DebounceTimeout = TimeSpan.FromMilliseconds(50);
             buttonPin.ValueChanged += OnButtonChanged;
 
-            // ---- Initial draw ----
-            Redraw();
+            // ---- Boot button ----
+            Log("[Program] Configure boot button");
+            var bootButtonPin = gpio.OpenPin(PinBootButton, PinMode.InputPullUp);
+            bootButtonPin.DebounceTimeout = TimeSpan.FromMilliseconds(50);
+            bootButtonPin.ValueChanged += BootButtonPin_ValueChanged;
 
-            // ---- Main loop — handles TX on the main thread ----
+            // -------------------------------------------------------
+            // Phase 1 — wait for a game to be created on the server
+            // -------------------------------------------------------
+            Log("[Program] Phase 1 show no games message");
+            driver.ShowMessage("No games available", "please wait");
             while (true)
             {
-                if (_sendRequested)
+                Log("[Program] Phase 1 GetCurrentGame");
+                GameInfo game = http.GetCurrentGame();
+                Log($"[Program] Phase 1 status={game.Status}");
+                if (game.Status != GameStatus.None)
                 {
-                    _sendRequested = false;
-                    DoSend();
+                    break;
                 }
-                Thread.Sleep(20);
+
+                //Thread.Sleep(1_000);
+            }
+
+            // -------------------------------------------------------
+            // Phase 2 — register + wait for game to go Active
+            // -------------------------------------------------------
+            Log("[Program] Phase 2 Register");
+            PlayerSetup setup = http.Register(_playerName);
+            Log($"Registered as DeviceId=0x{setup.DeviceId:X2}");
+            driver.ShowMessage("Waiting for", "players...");
+
+            GameInfo active = null;
+            while (true)
+            {
+                Log("[Program] Phase 2 GetCurrentGame");
+                GameInfo game = http.GetCurrentGame();
+                Log($"[Program] Phase 2 status={game.Status}");
+                if (game.Status == GameStatus.Active)
+                {
+                    active = game;
+                    break;
+                }
+
+                if (game.Status == GameStatus.None)
+                {
+                    Log("[Program] Phase 2 game cancelled, show no games message");
+                    driver.ShowMessage("No games available", "please wait");
+                }
+
+                //Thread.Sleep(1_000);
+            }
+
+            // -------------------------------------------------------
+            // Phase 3 — apply config and start
+            // -------------------------------------------------------
+            Log("[Program] Phase 3 create GameStateManager");
+            var state = new GameStateManager(deviceId: setup.DeviceId, playerName: _playerName);
+            Log("[Program] Phase 3 ApplyPlayerList");
+            state.ApplyPlayerList(active.Players);
+            Log("[Program] Phase 3 SetState Active");
+            state.SetState(GameState.Active);
+
+            var builder = new PacketBuilder();
+            var handler = new MessageHandler(new PacketParser(), state.DeviceId);
+            Log("[Program] Phase 3 create GamerDevice");
+            _device = new GamerDevice(state, driver, lora, builder, handler);
+
+            // Initial HUD
+            Log("[Program] Initial OnGameStart");
+            _device.OnGameStart();
+            Log("[Program] Enter main input loop");
+
+            while (true)
+            {
+                if (_attackRequested)
+                {
+                    _attackRequested = false;
+                    Log("Processing attack request");
+                    _device.Attack();
+                }
+
+                if (_cycleTargetsRequested)
+                {
+                    _cycleTargetsRequested = false;
+                    Log("Processing target cycle request");
+                    _device.CycleTargets();
+                }
+
+                Thread.Sleep(25);
+            }
+        }
+
+        private static void BootButtonPin_ValueChanged(object sender, PinValueChangedEventArgs args)
+        {
+            if (args.ChangeType == PinEventTypes.Rising)
+            {
+                Log("Boot button pressed, queueing target cycle");
+                _cycleTargetsRequested = true;
             }
         }
 
@@ -144,51 +250,11 @@ namespace ChirpTag
         private static void OnButtonChanged(object sender, PinValueChangedEventArgs args)
         {
             if (args.ChangeType == PinEventTypes.Rising)
-                _sendRequested = true;
-        }
-
-        // Called from main thread only
-        private static void DoSend()
-        {
-            try
             {
-                _txCount++;
-                byte[] payload = Encoding.UTF8.GetBytes("CHIRP " + _txCount);
-                _statusMsg = "TX #" + _txCount + "...";
-                Redraw();
-
-                _lora.Send(payload, 3000);
-
-                _statusMsg = "TX OK #" + _txCount;
-                Debug.WriteLine("TX OK #" + _txCount);
+                Log("User button pressed, queueing attack");
+                _attackRequested = true;
             }
-            catch (Exception ex)
-            {
-                _statusMsg = "TX FAIL";
-                Debug.WriteLine("TX failed: " + ex.Message);
-            }
-
-            Redraw();
-        }
-
-        private static void OnPacketReceived(object sender, LoRaMessage msg)
-        {
-            string text = Encoding.UTF8.GetString(msg.Payload, 0, msg.Payload.Length);
-            _lastRx = text + " (" + msg.Rssi + "dBm)";
-            Debug.WriteLine("RX: '" + text + "' RSSI=" + msg.Rssi + "dBm SNR=" + msg.Snr + "dB");
-            Redraw();
-        }
-
-        private static void Redraw()
-        {
-            byte status = _lora.GetStatus();
-            _display.BeginFrameDraw();
-            _gfx.DrawText("ChirpTag", _font, 4, 8, Color.Black);
-            _gfx.DrawText("Mode: " + Sx1262.DecodeChipMode(status), _font, 4, 26, Color.Black);
-            _gfx.DrawText(_statusMsg, _font, 4, 44, Color.Black);
-            _gfx.DrawText(_lastRx, _font, 4, 62, Color.Black);
-            _display.EndFrameDraw();
-            _display.PerformFullRefresh();
         }
     }
 }
+

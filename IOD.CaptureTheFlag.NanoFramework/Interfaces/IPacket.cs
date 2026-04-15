@@ -3,7 +3,7 @@
     public interface IPacket
     {
         byte DeviceId { get; }
-        byte MsgType { get; }
+        byte PacketType { get; }
         byte TargetId { get; }
         byte[] Data { get; }
         byte Crc { get; }

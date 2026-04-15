@@ -415,6 +415,125 @@
             <param name="end">The end point of the range.</param>
             <returns>True if the range is within this frame's area, otherwise; false.</returns>
         </member>
+        <member name="T:Iot.Device.EPaper.Drivers.IEPaperDisplay">
+            <summary>
+            Represents an ePaper Display device.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.Width">
+            <summary>
+            Gets the width of the drawable area on the display.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.Height">
+            <summary>
+            Gets the height of the drawable area on the display.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.FrameBuffer">
+            <summary>
+            Gets the frame buffer.
+            </summary>
+            <remarks>
+            This frame buffer instance could be pointing to a portion of the full display frame
+            as a measure to reduce memory footprint. See the ctor documentation for more info.
+            </remarks>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.PagedFrameDrawEnabled">
+            <summary>
+            Gets a value indicating whether drawing to a frame is paged to save on memory space.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.Clear(System.Boolean)">
+            <summary>
+            Clears the display frame buffer by resetting it to its default state.
+            </summary>
+            <param name="triggerPageRefresh"><see langword="true"/> to also flush the buffer to the display and trigger the refresh sequence.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.Flush">
+            <summary>
+            Flushes the content of the internal frame buffer to the display.
+            </summary>
+            <remarks>
+            You will only need to use this method if you have disabled frame paged draws.
+            </remarks>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.PerformFullRefresh">
+            <summary>
+            Initiates the full refresh sequence on the display.
+            </summary>
+            <returns>True if the screen sucessfully refresh. False otherwise (still busy after a predefined waiting time).</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.PerformPartialRefresh">
+            <summary>
+            Initiates the partial refresh sequence on the display if the panel supports it.
+            </summary>
+            <returns>True if the screen sucessfully refresh. False otherwise (still busy after a predefined waiting time).</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SetPosition(System.Int32,System.Int32)">
+            <summary>
+            Sets the drawing position on the display.
+            </summary>
+            <param name="x">The X position.</param>
+            <param name="y">The Y position.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.DrawPixel(System.Int32,System.Int32,System.Drawing.Color)">
+            <summary>
+            Draws a single pixel to the appropriate frame buffer based on the specified color.
+            </summary>
+            <param name="x">The X Position.</param>
+            <param name="y">The Y Position.</param>
+            <param name="color">Pixel color. See the remarks for how a buffer is selected based on the color value.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SendCommand(System.Byte[])">
+            <summary>
+            Sends a command byte(s) to the display.
+            </summary>
+            <param name="command">The command bytes to send. See the command enum within the driver implementation and consult the datasheet.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SendData(System.Byte[])">
+            <summary>
+            Send frame data to the display.
+            </summary>
+            <param name="data">The frame data to send.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SendData(System.UInt16[])">
+            <summary>
+            Send frame data to the display.
+            </summary>
+            <param name="data">The frame data to send.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.WaitReady(System.Threading.CancellationToken)">
+            <summary>
+            Blocks the current thread until the display is in idle mode again.
+            </summary>
+            <param name="cancellationToken">The <see cref="T:System.Threading.CancellationToken"/> to be able to cancel the waiting time.</param>
+            <returns>True if it returns before the <see cref="T:System.Threading.CancellationToken"/> expires, false otherwise.</returns>
+            <remarks>If cancellationToken is null, this method will block until the busy pin is low.</remarks>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.BeginFrameDraw">
+            <summary>
+            Begins a frame draw operation with frame paging support.
+            <code>
+            BeginFrameDraw();
+            do {
+                // Drawing calls
+            } while (NextFramePage());
+            EndFrameDraw();
+            </code>
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.NextFramePage">
+            <summary>
+            Moves the current buffers to the next frame page and returns true if successful.
+            </summary>
+            <returns>True if the next frame page is available and the internal buffers have moved to it, false otherwise.</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.EndFrameDraw">
+            <summary>
+            Ends the frame draw and flushes the current page to the device.
+            </summary>
+        </member>
         <member name="T:Iot.Device.EPaper.Drivers.Jd796xx.Command">
             <summary>
             Commands supported by SSD1681.
@@ -814,221 +933,6 @@
         <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.Jd79653A.Dispose">
             <inheritdoc />
         </member>
-        <member name="T:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13">
-            <summary>
-            Driver for the LCMEN2R13EFC1 2.13" black-and-white e-paper display.
-            </summary>
-            <remarks>
-            The visible panel is 122x250 pixels, while the controller RAM is byte-aligned to 128x250 pixels.
-            This driver exposes the native controller RAM geometry so drawing and frame buffer layout remain consistent.
-            </remarks>
-        </member>
-        <member name="F:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PanelWidth">
-            <summary>
-            Native controller RAM width in pixels.
-            </summary>
-        </member>
-        <member name="F:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PanelHeight">
-            <summary>
-            Native controller RAM height in pixels.
-            </summary>
-        </member>
-        <member name="F:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.FrameBufferSize">
-            <summary>
-            Frame buffer size in bytes for a 1-bit-per-pixel image.
-            </summary>
-        </member>
-        <member name="F:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SpiClockFrequency">
-            <summary>
-            Maximum SPI clock frequency in hertz.
-            </summary>
-        </member>
-        <member name="F:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SpiMode">
-            <summary>
-            SPI mode used by the controller.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.#ctor(System.Device.Spi.SpiDevice,System.Int32,System.Int32,System.Int32,System.Device.Gpio.GpioController,System.Boolean)">
-            <summary>
-            Initializes a new instance of the <see cref="T:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13"/> class.
-            </summary>
-            <param name="spiDevice">SPI device used to communicate with the display.</param>
-            <param name="resetPin">GPIO pin number for reset, or -1 if reset is not used.</param>
-            <param name="busyPin">GPIO pin number for busy, or -1 if busy monitoring is not available.</param>
-            <param name="dataCommandPin">GPIO pin number for data/command selection.</param>
-            <param name="gpioController">GPIO controller instance, or null to create a new controller.</param>
-            <param name="shouldDispose">True to dispose the provided GPIO controller when the driver is disposed.</param>
-            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="spiDevice"/> is null.</exception>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.Width">
-            <summary>
-            Gets the native panel width in pixels.
-            </summary>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.Height">
-            <summary>
-            Gets the native panel height in pixels.
-            </summary>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.FrameBuffer">
-            <summary>
-            Gets the active frame buffer used for drawing.
-            </summary>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PagedFrameDrawEnabled">
-            <summary>
-            Gets a value indicating whether paged frame drawing is supported.
-            </summary>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.FrameBuffer1bpp">
-            <summary>
-            Gets the internal 1-bit-per-pixel frame buffer.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.BeginFrameDraw">
-            <summary>
-            Begins a new frame draw operation by clearing the frame buffer to white.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.NextFramePage">
-            <summary>
-            Advances to the next frame page.
-            </summary>
-            <returns>Always returns false because paged drawing is not supported.</returns>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.EndFrameDraw">
-            <summary>
-            Ends the frame draw operation by flushing the frame buffer and performing a full refresh.
-            Use <see cref="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PerformPartialRefresh"/> explicitly for differential updates.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.DrawPixel(System.Int32,System.Int32,System.Drawing.Color)">
-            <summary>
-            Draws a single pixel into the internal frame buffer using native panel coordinates.
-            </summary>
-            <param name="x">The horizontal pixel coordinate.</param>
-            <param name="y">The vertical pixel coordinate.</param>
-            <param name="color">The pixel color.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.Flush">
-            <summary>
-            Flushes the internal frame buffer to display RAM.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SetPosition(System.Int32,System.Int32)">
-            <summary>
-            Sets the current drawing position.
-            </summary>
-            <param name="x">The horizontal position.</param>
-            <param name="y">The vertical position.</param>
-            <exception cref="T:System.NotImplementedException">Always thrown because positioned drawing is not implemented.</exception>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PerformPartialRefresh">
-            <summary>
-            Performs a partial refresh of the display.
-            </summary>
-            <returns>True if the refresh command sequence was issued successfully.</returns>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.HardwareReset">
-            <summary>
-            Performs a hardware reset of the display.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PowerOn">
-            <summary>
-            Powers on and initializes the display controller.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.Clear(System.Boolean)">
-            <summary>
-            Clears the display buffer to white and optionally refreshes the panel.
-            </summary>
-            <param name="triggerPageRefresh">True to trigger a full panel refresh after clearing.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PerformFullRefresh">
-            <summary>
-            Performs a full display refresh.
-            </summary>
-            <returns>True if the refresh command sequence was issued successfully.</returns>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PowerDown">
-            <summary>
-            Powers down the display and enters deep sleep mode.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SendCommand(System.Byte[])">
-            <summary>
-            Sends one or more command bytes to the display.
-            </summary>
-            <param name="command">The command bytes to send.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SendData(System.Byte[])">
-            <summary>
-            Sends one or more data bytes to the display.
-            </summary>
-            <param name="data">The data bytes to send.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SendData(System.UInt16[])">
-            <summary>
-            Sends one or more 16-bit data values to the display.
-            </summary>
-            <param name="data">The 16-bit data values to send.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.WaitReady(System.Threading.CancellationToken)">
-            <summary>
-            Waits until the display controller reports ready.
-            If no busy pin is available, a fixed delay is used instead.
-            </summary>
-            <param name="cancellationToken">A cancellation token for the wait operation.</param>
-            <returns>True when the display is ready.</returns>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.Dispose">
-            <summary>
-            Releases the resources used by the display driver.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.PrepareForWrite">
-            <summary>
-            Sends controller settings required before writing image data.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.ConfigurePartialRefreshParameters">
-            <summary>
-            Configures controller settings required before a partial refresh.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.LoadPartialRefreshLuts">
-            <summary>
-            Loads partial-refresh LUT tables from MCU RAM.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.ResetRamPointers">
-            <summary>
-            Sets the RAM address counters to the start position.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.WriteFrameBufferForPartialRefresh">
-            <summary>
-            Writes the previous and current frame buffers to display RAM for partial refresh.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.SaveCurrentFrameAsPrevious">
-            <summary>
-            Copies the current frame buffer into the previous-frame buffer.
-            </summary>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.WaitMs(System.Int32)">
-            <summary>
-            Waits for the specified number of milliseconds.
-            </summary>
-            <param name="milliseconds">The delay in milliseconds.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.Jd796xx.LcmEn2r13.LcmEn2r13.Dispose(System.Boolean)">
-            <summary>
-            Releases managed resources used by the display driver.
-            </summary>
-            <param name="disposing">True to dispose managed resources.</param>
-        </member>
         <member name="T:Iot.Device.EPaper.Drivers.Jd796xx.SleepMode">
             <summary>
             SSD1681 Supported Sleep Modes.
@@ -1056,124 +960,194 @@
             - RAM Data Access: OFF (RAM contents NOT retained).
             </summary>
         </member>
-        <member name="T:Iot.Device.EPaper.Drivers.IEPaperDisplay">
+        <member name="T:Iot.Device.EPaper.Drivers.LcmEn2r13.Command">
             <summary>
-            Represents an ePaper Display device.
+            Commands used by the LCMEN2R13 display driver.
             </summary>
         </member>
-        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.Width">
+        <member name="T:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13">
             <summary>
-            Gets the width of the drawable area on the display.
-            </summary>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.Height">
-            <summary>
-            Gets the height of the drawable area on the display.
-            </summary>
-        </member>
-        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.FrameBuffer">
-            <summary>
-            Gets the frame buffer.
+            Driver for the LCMEN2R13EFC1 2.13" black-and-white e-paper display.
             </summary>
             <remarks>
-            This frame buffer instance could be pointing to a portion of the full display frame
-            as a measure to reduce memory footprint. See the ctor documentation for more info.
+            The visible panel is 122x250 pixels, while the controller RAM is byte-aligned to 128x250 pixels.
+            This driver exposes the native controller RAM geometry so drawing and frame buffer layout remain consistent.
             </remarks>
         </member>
-        <member name="P:Iot.Device.EPaper.Drivers.IEPaperDisplay.PagedFrameDrawEnabled">
+        <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PanelWidth">
             <summary>
-            Gets a value indicating whether drawing to a frame is paged to save on memory space.
+            Native controller RAM width in pixels.
             </summary>
         </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.Clear(System.Boolean)">
+        <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PanelHeight">
             <summary>
-            Clears the display frame buffer by resetting it to its default state.
-            </summary>
-            <param name="triggerPageRefresh"><see langword="true"/> to also flush the buffer to the display and trigger the refresh sequence.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.Flush">
-            <summary>
-            Flushes the content of the internal frame buffer to the display.
-            </summary>
-            <remarks>
-            You will only need to use this method if you have disabled frame paged draws.
-            </remarks>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.PerformFullRefresh">
-            <summary>
-            Initiates the full refresh sequence on the display.
-            </summary>
-            <returns>True if the screen sucessfully refresh. False otherwise (still busy after a predefined waiting time).</returns>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.PerformPartialRefresh">
-            <summary>
-            Initiates the partial refresh sequence on the display if the panel supports it.
-            </summary>
-            <returns>True if the screen sucessfully refresh. False otherwise (still busy after a predefined waiting time).</returns>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SetPosition(System.Int32,System.Int32)">
-            <summary>
-            Sets the drawing position on the display.
-            </summary>
-            <param name="x">The X position.</param>
-            <param name="y">The Y position.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.DrawPixel(System.Int32,System.Int32,System.Drawing.Color)">
-            <summary>
-            Draws a single pixel to the appropriate frame buffer based on the specified color.
-            </summary>
-            <param name="x">The X Position.</param>
-            <param name="y">The Y Position.</param>
-            <param name="color">Pixel color. See the remarks for how a buffer is selected based on the color value.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SendCommand(System.Byte[])">
-            <summary>
-            Sends a command byte(s) to the display.
-            </summary>
-            <param name="command">The command bytes to send. See the command enum within the driver implementation and consult the datasheet.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SendData(System.Byte[])">
-            <summary>
-            Send frame data to the display.
-            </summary>
-            <param name="data">The frame data to send.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.SendData(System.UInt16[])">
-            <summary>
-            Send frame data to the display.
-            </summary>
-            <param name="data">The frame data to send.</param>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.WaitReady(System.Threading.CancellationToken)">
-            <summary>
-            Blocks the current thread until the display is in idle mode again.
-            </summary>
-            <param name="cancellationToken">The <see cref="T:System.Threading.CancellationToken"/> to be able to cancel the waiting time.</param>
-            <returns>True if it returns before the <see cref="T:System.Threading.CancellationToken"/> expires, false otherwise.</returns>
-            <remarks>If cancellationToken is null, this method will block until the busy pin is low.</remarks>
-        </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.BeginFrameDraw">
-            <summary>
-            Begins a frame draw operation with frame paging support.
-            <code>
-            BeginFrameDraw();
-            do {
-                // Drawing calls
-            } while (NextFramePage());
-            EndFrameDraw();
-            </code>
+            Native controller RAM height in pixels.
             </summary>
         </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.NextFramePage">
+        <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.FrameBufferSize">
             <summary>
-            Moves the current buffers to the next frame page and returns true if successful.
+            Frame buffer size in bytes for a 1-bit-per-pixel image.
             </summary>
-            <returns>True if the next frame page is available and the internal buffers have moved to it, false otherwise.</returns>
         </member>
-        <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.EndFrameDraw">
+        <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SpiClockFrequency">
             <summary>
-            Ends the frame draw and flushes the current page to the device.
+            Maximum SPI clock frequency in hertz.
             </summary>
+        </member>
+        <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SpiMode">
+            <summary>
+            SPI mode used by the controller.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.#ctor(System.Device.Spi.SpiDevice,System.Int32,System.Int32,System.Int32,System.Device.Gpio.GpioController,System.Boolean)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13"/> class.
+            </summary>
+            <param name="spiDevice">SPI device used to communicate with the display.</param>
+            <param name="resetPin">GPIO pin number for reset, or -1 if reset is not used.</param>
+            <param name="busyPin">GPIO pin number for busy, or -1 if busy monitoring is not available.</param>
+            <param name="dataCommandPin">GPIO pin number for data/command selection.</param>
+            <param name="gpioController">GPIO controller instance, or null to create a new controller.</param>
+            <param name="shouldDispose">True to dispose the provided GPIO controller when the driver is disposed.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="spiDevice"/> is null.</exception>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Width">
+            <summary>
+            Gets the native panel width in pixels.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Height">
+            <summary>
+            Gets the native panel height in pixels.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.FrameBuffer">
+            <summary>
+            Gets the active frame buffer used for drawing.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PagedFrameDrawEnabled">
+            <summary>
+            Gets a value indicating whether paged frame drawing is supported.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.FrameBuffer1bpp">
+            <summary>
+            Gets the internal 1-bit-per-pixel frame buffer.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.BeginFrameDraw">
+            <summary>
+            Begins a new frame draw operation by clearing the frame buffer to white.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.NextFramePage">
+            <summary>
+            Advances to the next frame page.
+            </summary>
+            <returns>Always returns false because paged drawing is not supported.</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.EndFrameDraw">
+            <summary>
+            Ends the frame draw operation by flushing the frame buffer and refreshing the panel.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.DrawPixel(System.Int32,System.Int32,System.Drawing.Color)">
+            <summary>
+            Draws a single pixel into the internal frame buffer using native panel coordinates.
+            </summary>
+            <param name="x">The horizontal pixel coordinate.</param>
+            <param name="y">The vertical pixel coordinate.</param>
+            <param name="color">The pixel color.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Flush">
+            <summary>
+            Flushes the internal frame buffer to display RAM.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SetPosition(System.Int32,System.Int32)">
+            <summary>
+            Sets the current drawing position.
+            </summary>
+            <param name="x">The horizontal position.</param>
+            <param name="y">The vertical position.</param>
+            <exception cref="T:System.NotImplementedException">Always thrown because positioned drawing is not implemented.</exception>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PerformPartialRefresh">
+            <summary>
+            Performs a partial refresh of the display.
+            </summary>
+            <returns>True if the refresh command sequence was issued successfully.</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.HardwareReset">
+            <summary>
+            Performs a hardware reset of the display.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PowerOn">
+            <summary>
+            Powers on and initializes the display controller.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Clear(System.Boolean)">
+            <summary>
+            Clears the display buffer to white and optionally refreshes the panel.
+            </summary>
+            <param name="triggerPageRefresh">True to trigger a full panel refresh after clearing.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PerformFullRefresh">
+            <summary>
+            Performs a full display refresh.
+            </summary>
+            <returns>True if the refresh command sequence was issued successfully.</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PowerDown">
+            <summary>
+            Powers down the display and enters deep sleep mode.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SendCommand(System.Byte[])">
+            <summary>
+            Sends one or more command bytes to the display.
+            </summary>
+            <param name="command">The command bytes to send.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SendData(System.Byte[])">
+            <summary>
+            Sends one or more data bytes to the display.
+            </summary>
+            <param name="data">The data bytes to send.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SendData(System.UInt16[])">
+            <summary>
+            Sends one or more 16-bit data values to the display.
+            </summary>
+            <param name="data">The 16-bit data values to send.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.WaitReady(System.Threading.CancellationToken)">
+            <summary>
+            Waits until the display controller reports ready.
+            If no busy pin is available, a fixed delay is used instead.
+            </summary>
+            <param name="cancellationToken">A cancellation token for the wait operation.</param>
+            <returns>True when the display is ready.</returns>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Dispose">
+            <summary>
+            Releases the resources used by the display driver.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.WaitMs(System.Int32)">
+            <summary>
+            Waits for the specified number of milliseconds.
+            </summary>
+            <param name="milliseconds">The delay in milliseconds.</param>
+        </member>
+        <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Dispose(System.Boolean)">
+            <summary>
+            Releases managed resources used by the display driver.
+            </summary>
+            <param name="disposing">True to dispose managed resources.</param>
         </member>
         <member name="T:Iot.Device.EPaper.Drivers.Ssd168x.Ssd1680.Ssd1680">
             <summary>
