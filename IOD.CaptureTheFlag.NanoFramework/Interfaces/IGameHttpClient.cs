@@ -11,8 +11,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         GameInfo GetCurrentGame();
 
         /// <summary>
-        /// Register by player name. Only call when Status == Waiting.
-        /// Returns assigned DeviceId.
+        /// Register by player name. Call when joining or after reboot.
+        /// Server may return the same <c>DeviceId</c> for the same name in the current game (Waiting or Active).
         /// </summary>
         PlayerSetup Register(string playerName);
 

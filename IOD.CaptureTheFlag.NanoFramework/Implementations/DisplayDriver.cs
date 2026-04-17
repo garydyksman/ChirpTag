@@ -16,7 +16,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private readonly Graphics _graphics;
         private readonly Font8x12 _font;
         private readonly object _lock = new object();
-        private const bool VerboseLogging = false;
         private const bool VerbosePartialLogging = false;
         private const bool UsePartialHeartbeatRefresh = true;
         private const bool UsePartialHudListRefresh = true;
@@ -664,10 +663,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _graphics.DrawText(sb.ToString(), _font, BarX, BarY, Color.Black);
         }
 
+        // When VERBOSE_DISPLAY is not in DefineConstants, all Log(...) calls (and their arguments) compile out.
+        [Conditional("VERBOSE_DISPLAY")]
         private void Log(string message)
         {
-            if (VerboseLogging)
-                DebugLog.Write("[Display] " + message);
+            DebugLog.Write("[Display] " + message);
         }
     }
 }

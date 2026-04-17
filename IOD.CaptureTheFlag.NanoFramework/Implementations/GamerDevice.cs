@@ -33,7 +33,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int HeartbeatIndicatorQuietWindowMs = 3_000;
         private const long TicksPerMillisecond = 10_000L;
         private const int MaxRenderedTargets = 16;   // keep aligned with GameStateManager.MaxPlayers
-        private const bool VerboseLogging = false;
         private const bool VerboseByteLogging = false;
         private const bool VerboseTickLogging = false;
         private const bool VerboseRadioLogging = false;
@@ -900,10 +899,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void EnterDelivering(byte flagNodeId) { throw new NotImplementedException(); }
         public void EnterStunned() { throw new NotImplementedException(); }
 
+        // When GAMER_DEVICE_TRACE is not in DefineConstants, all Log(...) calls (and their arguments) compile out.
+        [Conditional("GAMER_DEVICE_TRACE")]
         private void Log(string message)
         {
-            if (VerboseLogging)
-                DebugLog.Write("[GamerDevice] " + message);
+            DebugLog.Write("[GamerDevice] " + message);
         }
     }
 }
