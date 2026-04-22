@@ -55,6 +55,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private readonly IWifiHttpBridge _wifiForHttp;
         private readonly System.Action _pauseLoRaForWifi;
         private readonly System.Action _resumeLoRaAfterWifi;
+        /// <summary>Serializes respawn / HUD-list flags between LoRa callbacks, HTTP work, and the UI thread (nanoFramework: do not use <c>volatile</c> here).</summary>
+        private readonly object _crossThreadSignalLock = new object();
         private bool _awaitingRespawnAck;
         private bool _respawnHttpInProgress;
 
@@ -291,8 +293,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         _state.CopyCombatTargetRssi(_scratchCombatRssi, MaxRenderedTargets);
                         if (VerboseTickLogging) Log($"UiLoop targets count={count} selected={selectedIndex}");
 
+                        bool paintAfterHeartbeat;
+                        lock (_crossThreadSignalLock)
+                        {
+                            paintAfterHeartbeat = _hudListPaintAfterPeerHeartbeat;
+                        }
+
                         bool combatListChanged = HasCombatListChanged(targets, count, selectedIndex, _scratchCombatRssi)
-                            || _hudListPaintAfterPeerHeartbeat;
+                            || paintAfterHeartbeat;
                         if (_combatListDirty && !combatListChanged)
                         {
                             Log("UiLoop combat list dirty but unchanged; clearing dirty flag");
@@ -306,7 +314,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                             MarkDisplayActivity("combat-list");
                             CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi);
                             _combatListDirty = false;
-                            _hudListPaintAfterPeerHeartbeat = false;
+                            lock (_crossThreadSignalLock)
+                            {
+                                _hudListPaintAfterPeerHeartbeat = false;
+                            }
+
                             Log("UiLoop combat list rendered dirty=false");
                         }
                         else
@@ -491,7 +503,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
             if (_uiMode == UiMode.Hud)
             {
-                _hudListPaintAfterPeerHeartbeat = true;
+                lock (_crossThreadSignalLock)
+                {
+                    _hudListPaintAfterPeerHeartbeat = true;
+                }
+
                 if (VerboseRadioLogging) Log("OnHeartbeatReceived HUD list paint requested");
             }
             else if (VerboseRadioLogging)
@@ -694,7 +710,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void OnRespawnAckReceived(byte newCombatScore)
         {
             Log($"OnRespawnAckReceived newScore={newCombatScore} state={_state.State} uiMode={_uiMode}");
-            _awaitingRespawnAck = false;
+            lock (_crossThreadSignalLock)
+            {
+                _awaitingRespawnAck = false;
+            }
+
             _state.Respawn(newCombatScore);
             ResetCombatFlow();
             EnterHud();
@@ -718,7 +738,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public override void OnGameEnd(byte winnerId)
         {
             Log($"OnGameEnd begin winner=0x{winnerId:X2} state={_state.State} uiMode={_uiMode}");
-            _awaitingRespawnAck = false;
+            lock (_crossThreadSignalLock)
+            {
+                _awaitingRespawnAck = false;
+            }
+
             _state.SetState(GameState.Idle);
             ResetCombatFlow();
 
@@ -843,27 +867,39 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi);
 
             _combatListDirty = false;
-            _hudListPaintAfterPeerHeartbeat = false;
+            lock (_crossThreadSignalLock)
+            {
+                _hudListPaintAfterPeerHeartbeat = false;
+            }
+
             Log("RenderHudAndList end dirty=false");
         }
 
         private void TryRespawnViaHttpAndLoRa()
         {
-            if (_awaitingRespawnAck || _respawnHttpInProgress)
+            lock (_crossThreadSignalLock)
             {
-                DebugLog.Write("[GamerDevice] TryRespawn skipped (busy or awaiting LoRa ack)");
-                _display.ShowMessage("Respawning", "please wait");
-                return;
+                if (_awaitingRespawnAck || _respawnHttpInProgress)
+                {
+                    DebugLog.Write("[GamerDevice] TryRespawn skipped (busy or awaiting LoRa ack)");
+                    _display.ShowMessage("Respawning", "please wait");
+                    return;
+                }
+
+                _respawnHttpInProgress = true;
             }
 
             if (_httpForRespawn == null || _wifiForHttp == null)
             {
+                lock (_crossThreadSignalLock)
+                {
+                    _respawnHttpInProgress = false;
+                }
+
                 DebugLog.Write("[GamerDevice] TryRespawn: HTTP or Wi-Fi bridge not configured");
                 _display.ShowMessage("Respawn", "not configured");
                 return;
             }
-
-            _respawnHttpInProgress = true;
             _display.ShowMessage("Respawning", "please wait");
             bool pausedLoRa = false;
             try
@@ -910,7 +946,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 else
                 {
                     DebugLog.Write("[GamerDevice] TryRespawn LoRa RespawnReq flagNode=" + _state.EnemyFlagId.ToString());
-                    _awaitingRespawnAck = true;
+                    lock (_crossThreadSignalLock)
+                    {
+                        _awaitingRespawnAck = true;
+                    }
+
                     QueuePacket(_builder.RespawnReq(DeviceId, _state.EnemyFlagId));
                     _display.ShowMessage("Waiting", "flag node");
                     MarkDisplayActivity("respawn-sent");
@@ -938,7 +978,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     _resumeLoRaAfterWifi();
                 }
 
-                _respawnHttpInProgress = false;
+                lock (_crossThreadSignalLock)
+                {
+                    _respawnHttpInProgress = false;
+                }
             }
         }
 
