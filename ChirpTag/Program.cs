@@ -45,24 +45,6 @@ namespace ChirpTag
         private static bool _attackRequested;
         private static bool _cycleTargetsRequested;
 
-        /// <summary>Display / default name; normalized with <see cref="GameApiHttpClient.NormalizePlayerName"/> before API (trim + case-sensitive match on server).</summary>
-        private static string _playerName = "Martijn";
-
-        /// <summary>HTTPS root of the Capture The Flag API (no trailing slash).</summary>
-        private const string GameApiBaseUrl = "https://5mbvq3sq-5096.euw.devtunnels.ms";
-
-        /// <summary>
-        /// ESP32 nanoFramework TLS uses a small CA set; public chains for dev tunnels often fail
-        /// <see cref="SslVerification.CertificateRequired"/>. Use <see cref="SslVerification.NoVerification"/> only for development.
-        /// </summary>
-        private const SslVerification GameApiSslVerification = SslVerification.NoVerification;
-
-        /// <summary>
-        /// When <c>true</c>, continue to the HUD even if registration failed and <c>deviceId</c> is 0 (scores/peers will be wrong — for testing only).
-        /// Keep <c>false</c> for normal play.
-        /// </summary>
-        private const bool AllowHudWithoutValidDeviceId = false;
-
         private static void Log(string message)
         {
             DebugLog.Write(message);
@@ -133,6 +115,7 @@ namespace ChirpTag
         public static void Main()
         {
             Log("[Program] Main start");
+            ChirpTagConfigLoader.TryLoad();
             Log("[Program] Create GPIO controller");
             var gpio = new GpioController();
 
@@ -189,6 +172,17 @@ namespace ChirpTag
             Log("[Program] Create game display driver");
             var driver = new DisplayDriver(_display, gfx, font);
 
+            string gameApiBaseUrl = ChirpTagSettings.GameApiBaseUrl == null ? string.Empty : ChirpTagSettings.GameApiBaseUrl.Trim();
+            if (gameApiBaseUrl.Length == 0)
+            {
+                driver.ShowMessage("Missing config", "gameApiBaseUrl");
+                Log("[Program] halt: set gameApiBaseUrl in appsettings.json (embedded) or " + ChirpTagConfigLoader.DefaultConfigPath);
+                while (true)
+                {
+                    Thread.Sleep(60_000);
+                }
+            }
+
             // ---- Wi-Fi (HTTP API; torn down before LoRa) ----
             WifiBootOutcome wifiBoot = WifiBootOutcome.Skipped;
             if (WiFiBootstrap.IsConfigured)
@@ -214,8 +208,11 @@ namespace ChirpTag
 
             // ---- HTTP game client ----
             Log("[Program] Create game HTTP client");
-            IGameHttpClient http = new GameApiHttpClient(GameApiBaseUrl, GameApiSslVerification);
-            string apiPlayerName = GameApiHttpClient.NormalizePlayerName(_playerName);
+            SslVerification ssl = ChirpTagSettings.GameApiSslNoVerify
+                ? SslVerification.NoVerification
+                : SslVerification.CertificateRequired;
+            IGameHttpClient http = new GameApiHttpClient(gameApiBaseUrl, ssl);
+            string apiPlayerName = GameApiHttpClient.NormalizePlayerName(ChirpTagSettings.PlayerName);
 
             // ---- User button ----
             Log("[Program] Configure user button");
@@ -304,7 +301,7 @@ namespace ChirpTag
 
             if (setup.DeviceId == 0)
             {
-                if (!AllowHudWithoutValidDeviceId)
+                if (!ChirpTagSettings.AllowHudWithoutValidDeviceId)
                 {
                     driver.ShowMessage("Cannot join", "game running");
                     Log("[Program] halt: no deviceId (register failed or name not in game — use same name or wait for next game)");
@@ -314,7 +311,7 @@ namespace ChirpTag
                     }
                 }
 
-                Log("[Program] AllowHudWithoutValidDeviceId: continuing with deviceId=0 (test only)");
+                Log("[Program] AllowHudWithoutValidDeviceId (config): continuing with deviceId=0 (test only)");
                 driver.ShowMessage("TEST", "no device id");
             }
 
