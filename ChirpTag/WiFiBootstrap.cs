@@ -25,10 +25,10 @@ namespace ChirpTag
     public static class WiFiBootstrap
     {
         /// <summary>WPA2-PSK SSID (2.4 GHz AP for ESP32). Leave empty to skip Wi-Fi entirely.</summary>
-        public const string Ssid = "Odido-062073";
+        public const string Ssid = "iO - Guest";
 
         /// <summary>Pre-shared key; empty for open networks (rare).</summary>
-        public const string Password = "WLNYR58VQ5UGBUB5";
+        public const string Password = "@ioguest"; //"WLNYR58VQ5UGBUB5";
 
         /// <summary>Delay after power rails / pin mux so Wi-Fi can start cleanly.</summary>
         public const int RadioSettleMs = 500;

@@ -45,7 +45,8 @@ namespace ChirpTag
         private static bool _attackRequested;
         private static bool _cycleTargetsRequested;
 
-        private static string _playerName = "Sarah";
+        /// <summary>Display / default name; normalized with <see cref="GameApiHttpClient.NormalizePlayerName"/> before API (trim + case-sensitive match on server).</summary>
+        private static string _playerName = "Martijn";
 
         /// <summary>HTTPS root of the Capture The Flag API (no trailing slash).</summary>
         private const string GameApiBaseUrl = "https://5mbvq3sq-5096.euw.devtunnels.ms";
@@ -55,6 +56,12 @@ namespace ChirpTag
         /// <see cref="SslVerification.CertificateRequired"/>. Use <see cref="SslVerification.NoVerification"/> only for development.
         /// </summary>
         private const SslVerification GameApiSslVerification = SslVerification.NoVerification;
+
+        /// <summary>
+        /// When <c>true</c>, continue to the HUD even if registration failed and <c>deviceId</c> is 0 (scores/peers will be wrong — for testing only).
+        /// Keep <c>false</c> for normal play.
+        /// </summary>
+        private const bool AllowHudWithoutValidDeviceId = false;
 
         private static void Log(string message)
         {
@@ -203,12 +210,12 @@ namespace ChirpTag
             if (wifiBoot == WifiBootOutcome.Connected)
             {
                 driver.ShowMessage("WiFi", "OK");
-                Thread.Sleep(2_000);
             }
 
             // ---- HTTP game client ----
             Log("[Program] Create game HTTP client");
             IGameHttpClient http = new GameApiHttpClient(GameApiBaseUrl, GameApiSslVerification);
+            string apiPlayerName = GameApiHttpClient.NormalizePlayerName(_playerName);
 
             // ---- User button ----
             Log("[Program] Configure user button");
@@ -225,8 +232,8 @@ namespace ChirpTag
             // -------------------------------------------------------
             // Phase 1 � wait for a game to be created on the server
             // -------------------------------------------------------
-            Log("[Program] Phase 1 show no games message");
-            driver.ShowMessage("No games available", "please wait");
+            Log("[Program] Phase 1 show connecting / looking for game");
+            driver.ShowMessage("Connecting to the server", "looking for a game");
             while (true)
             {
                 Log("[Program] Phase 1 GetCurrentGame");
@@ -246,7 +253,7 @@ namespace ChirpTag
             GameInfo phase2Snapshot = http.GetCurrentGame();
             PlayerSetup setup;
             if (phase2Snapshot.Status == GameStatus.Active
-                && TryGetDeviceIdForPlayerName(phase2Snapshot.Players, _playerName, out byte rosterId))
+                && TryGetDeviceIdForPlayerName(phase2Snapshot.Players, apiPlayerName, out byte rosterId))
             {
                 setup = new PlayerSetup { DeviceId = rosterId };
                 Log("[Program] Phase 2 reconnect from roster deviceId=" + rosterId.ToString());
@@ -255,9 +262,16 @@ namespace ChirpTag
             else
             {
                 Log("[Program] Phase 2 Register");
-                setup = http.Register(_playerName);
+                setup = http.Register(apiPlayerName);
                 Log("[Program] Phase 2 registered deviceId=" + setup.DeviceId.ToString());
-                driver.ShowMessage("Waiting for", "players...");
+                if (setup.DeviceId == 0)
+                {
+                    driver.ShowMessage("Register failed", "name or game?");
+                }
+                else
+                {
+                    driver.ShowMessage("Waiting for", "players...");
+                }
             }
 
             GameInfo active = null;
@@ -274,18 +288,39 @@ namespace ChirpTag
 
                 if (game.Status == GameStatus.None)
                 {
-                    Log("[Program] Phase 2 game cancelled, show no games message");
-                    driver.ShowMessage("No games available", "please wait");
+                    Log("[Program] Phase 2 game cancelled, show connecting / looking for game");
+                    driver.ShowMessage("Connecting to the server", "looking for a game");
                 }
 
                 Thread.Sleep(1_000);
             }
 
+            if (setup.DeviceId == 0
+                && TryGetDeviceIdForPlayerName(active.Players, apiPlayerName, out byte recoveredId))
+            {
+                setup = new PlayerSetup { DeviceId = recoveredId };
+                Log("[Program] Phase 2 deviceId from Active roster=" + recoveredId.ToString());
+            }
+
+            if (setup.DeviceId == 0)
+            {
+                if (!AllowHudWithoutValidDeviceId)
+                {
+                    driver.ShowMessage("Cannot join", "game running");
+                    Log("[Program] halt: no deviceId (register failed or name not in game — use same name or wait for next game)");
+                    while (true)
+                    {
+                        Thread.Sleep(60_000);
+                    }
+                }
+
+                Log("[Program] AllowHudWithoutValidDeviceId: continuing with deviceId=0 (test only)");
+                driver.ShowMessage("TEST", "no device id");
+            }
+
             // -------------------------------------------------------
             // Phase 3 � apply config and start
             // -------------------------------------------------------
-            http = null;
-
             WiFiBootstrap.TearDownRadio();
 
             Log("[Program] Configure LoRa pins");
@@ -315,7 +350,7 @@ namespace ChirpTag
             lora.Initialise();
 
             Log("[Program] Phase 3 create GameStateManager");
-            var state = new GameStateManager(deviceId: setup.DeviceId, playerName: _playerName);
+            var state = new GameStateManager(deviceId: setup.DeviceId, playerName: apiPlayerName);
             Log("[Program] Phase 3 ApplyPlayerList");
             state.ApplyPlayerList(active.Players);
             Log("[Program] Phase 3 SetState Active");
@@ -324,7 +359,17 @@ namespace ChirpTag
             var builder = new PacketBuilder();
             var handler = new MessageHandler(new PacketParser(), state.DeviceId);
             Log("[Program] Phase 3 create GamerDevice");
-            _device = new GamerDevice(state, driver, lora, builder, handler);
+            var wifiBridge = new WifiHttpBridge();
+            _device = new GamerDevice(
+                state,
+                driver,
+                lora,
+                builder,
+                handler,
+                http,
+                wifiBridge,
+                () => lora.StopPolling(),
+                () => lora.StartPolling());
 
             // Initial HUD
             Log("[Program] Initial OnGameStart");
@@ -336,15 +381,15 @@ namespace ChirpTag
                 if (_attackRequested)
                 {
                     _attackRequested = false;
-                    Log("Processing attack request");
-                    _device.Attack();
+                    Log("Processing combat button");
+                    _device.OnCombatButtonPressed();
                 }
 
                 if (_cycleTargetsRequested)
                 {
                     _cycleTargetsRequested = false;
-                    Log("Processing target cycle request");
-                    _device.CycleTargets();
+                    Log("Processing cycle-targets button");
+                    _device.OnCycleTargetsButtonPressed();
                 }
 
                 Thread.Sleep(25);

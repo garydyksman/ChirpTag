@@ -35,6 +35,7 @@
     <Compile Include="Implementations\TxQueue.cs" />
     <Compile Include="Interfaces\IDisplayDriver.cs" />
     <Compile Include="Interfaces\IGameHttpClient.cs" />
+    <Compile Include="Interfaces\IWifiHttpBridge.cs" />
     <Compile Include="Interfaces\IGameStateManager.cs" />
     <Compile Include="Types\GameInfo.cs" />
     <Compile Include="Types\HudData.cs" />

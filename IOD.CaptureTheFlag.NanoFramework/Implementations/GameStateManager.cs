@@ -15,6 +15,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int DeviceLostTimeoutCycles = 15;
         private const int MaxDeviceId = 256;
         private const int MaxPlayers = 16;
+        private const int UnknownRssiDbm = -200;
+        /// <summary>Peers at or below this RSSI (once measured) are omitted from the combat target list.</summary>
+        private const int WeakLinkHideFromCombatListDbm = -90;
 
         // ---------------------------------------------------------------
         // Player list — from HTTP server, permanent for game duration
@@ -29,6 +32,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // ---------------------------------------------------------------
 
         private readonly int[] _lastSeen = new int[MaxDeviceId];
+        private readonly int[] _peerLastRssi = new int[MaxDeviceId];
         private int _presenceCycle = 1;
 
         // ---------------------------------------------------------------
@@ -72,6 +76,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Lives = 1;
             State = GameState.Idle;
             Timer = "00:00";
+            for (int i = 0; i < MaxDeviceId; i++)
+                _peerLastRssi[i] = UnknownRssiDbm;
             Log($"ctor deviceId=0x{DeviceId:X2} player={PlayerName} lives={Lives} state={State}");
         }
 
@@ -165,7 +171,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_peerLock)
             {
                 _lastSeen[deviceId] = _presenceCycle;
-                Log($"UpdatePeer lastSeen=0x{deviceId:X2} cycle={_lastSeen[deviceId]}");
+                _peerLastRssi[deviceId] = rssi;
+                Log($"UpdatePeer lastSeen=0x{deviceId:X2} cycle={_lastSeen[deviceId]} rssi={rssi}");
             }
             Log("UpdatePeer end");
         }
@@ -176,6 +183,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_peerLock)
             {
                 _lastSeen[deviceId] = 0;
+                _peerLastRssi[deviceId] = UnknownRssiDbm;
             }
             Log("RemovePeer end");
         }
@@ -191,6 +199,25 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _presenceCycle++;
             if (_presenceCycle == int.MaxValue)
                 _presenceCycle = 1;
+
+            if (State == GameState.Dead)
+            {
+                lock (_peerLock)
+                {
+                    for (int j = 0; j < _combatTargetCount; j++)
+                    {
+                        _combatTargets[j] = null;
+                        _combatTargetIds[j] = 0;
+                    }
+
+                    _combatTargetCount = 0;
+                    _selectedIndex = 0;
+                }
+
+                Log("RefreshCombatList end state=Dead count=0");
+                return;
+            }
+
             int i = 0;
 
             lock (_peerLock)
@@ -206,6 +233,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         // Timed out — reset presence, keep name
                         Log($"RefreshCombatList peer timeout id=0x{id:X2} lastSeen={_lastSeen[id]} cycle={_presenceCycle}");
                         _lastSeen[id] = 0;
+                        _peerLastRssi[id] = UnknownRssiDbm;
+                        continue;
+                    }
+
+                    int rssi = _peerLastRssi[id];
+                    if (rssi != UnknownRssiDbm && rssi <= WeakLinkHideFromCombatListDbm)
+                    {
+                        Log($"RefreshCombatList skip weak signal id=0x{id:X2} rssi={rssi}");
                         continue;
                     }
 
@@ -247,6 +282,25 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             return _combatTargets;
         }
 
+        public void CopyCombatTargetRssi(int[] dest, int maxCount)
+        {
+            if (dest == null || maxCount <= 0)
+                return;
+
+            lock (_peerLock)
+            {
+                int n = _combatTargetCount < maxCount ? _combatTargetCount : maxCount;
+                for (int i = 0; i < n; i++)
+                {
+                    byte id = _combatTargetIds[i];
+                    dest[i] = _peerLastRssi[id];
+                }
+
+                for (int i = n; i < maxCount && i < dest.Length; i++)
+                    dest[i] = UnknownRssiDbm;
+            }
+        }
+
         // ---------------------------------------------------------------
         // GetNearbyPeers — builds from parallel arrays, no string scan
         // ---------------------------------------------------------------
@@ -265,7 +319,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 {
                     DeviceId = deviceId,
                     PlayerName = _combatTargets[i],
-                    LastSeenAt = _lastSeen[deviceId]
+                    LastSeenAt = _lastSeen[deviceId],
+                    Rssi = _peerLastRssi[deviceId]
                 };
             }
 
@@ -290,7 +345,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 DeviceId = deviceId,
                 PlayerName = _combatTargets[_selectedIndex],
-                LastSeenAt = _lastSeen[deviceId]
+                LastSeenAt = _lastSeen[deviceId],
+                Rssi = _peerLastRssi[deviceId]
             };
         }
 

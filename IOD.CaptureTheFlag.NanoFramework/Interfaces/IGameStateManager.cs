@@ -54,6 +54,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         string[] GetCombatTargets(out int count);
 
         /// <summary>
+        /// Copies RSSI (dBm) for each current combat target, same order as <see cref="GetCombatTargets"/>.
+        /// Unknown entries use -200. Call <see cref="RefreshCombatList"/> first.
+        /// </summary>
+        void CopyCombatTargetRssi(int[] dest, int maxCount);
+
+        /// <summary>
         /// Builds PeerInfo array from current combat list.
         /// Not a hot path — use for diagnostics only.
         /// </summary>

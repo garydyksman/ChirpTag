@@ -105,13 +105,13 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             }
         }
 
-        /// <summary>POST /api/game/register. Same <c>playerName</c> in the same game may return the same <c>deviceId</c> (server idempotency / reconnect).</summary>
+        /// <inheritdoc cref="IGameHttpClient.Register"/>
         public PlayerSetup Register(string playerName)
         {
             try
             {
                 var body = new Hashtable();
-                body.Add("playerName", playerName ?? string.Empty);
+                body.Add("playerName", NormalizePlayerName(playerName));
                 string jsonBody = JsonSerializer.SerializeObject(body);
                 string json = PostJson("/api/game/register", jsonBody);
                 var dto = (PlayerSetupDto)JsonConvert.DeserializeObject(json, typeof(PlayerSetupDto), JsonOptions);
@@ -222,6 +222,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     last = ex;
                     Debug.WriteLine("[GameApi] PostJson retry " + attempt.ToString() + "/" + PostJsonMaxAttempts.ToString() + " summary=" + ex.Message);
                     Debug.WriteLine("[GameApi] PostJson retry chain: " + FormatExceptionChainForLog(ex, 8));
+                    if (ExceptionIndicatesHttpConflict(ex))
+                    {
+                        throw last;
+                    }
+
                     if (attempt < PostJsonMaxAttempts)
                     {
                         Thread.Sleep(PostJsonRetryBaseDelayMs + (attempt * 60));
@@ -230,6 +235,93 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             }
 
             throw last;
+        }
+
+        /// <summary>Leading/trailing ASCII control/space trimmed so the device sends the same string the server stores (case-sensitive match).</summary>
+        public static string NormalizePlayerName(string s)
+        {
+            if (s == null || s.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            int start = 0;
+            int end = s.Length - 1;
+            while (start <= end && s[start] <= ' ')
+            {
+                start++;
+            }
+
+            while (end >= start && s[end] <= ' ')
+            {
+                end--;
+            }
+
+            if (end < start)
+            {
+                return string.Empty;
+            }
+
+            return s.Substring(start, end - start + 1);
+        }
+
+        /// <summary>409 Conflict is permanent; retrying will not help (e.g. duplicate name in lobby, new player while game active).</summary>
+        private static bool ExceptionIndicatesHttpConflict(Exception ex)
+        {
+            const string tokenHttp = "HTTP 409";
+            const string tokenAttr = "http=409";
+            for (Exception e = ex; e != null; e = e.InnerException)
+            {
+                string m = e.Message;
+                if (m != null && (ContainsSubstring(m, tokenHttp) || ContainsSubstring(m, tokenAttr)))
+                {
+                    return true;
+                }
+
+                if (e is WebException wex)
+                {
+                    try
+                    {
+                        if (wex.Response is HttpWebResponse http && (int)http.StatusCode == 409)
+                        {
+                            return true;
+                        }
+                    }
+                    catch
+                    {
+                    }
+                }
+            }
+
+            return false;
+        }
+
+        private static bool ContainsSubstring(string haystack, string needle)
+        {
+            if (haystack == null || needle == null || needle.Length == 0 || haystack.Length < needle.Length)
+            {
+                return false;
+            }
+
+            int last = haystack.Length - needle.Length;
+            for (int i = 0; i <= last; i++)
+            {
+                int j = 0;
+                for (; j < needle.Length; j++)
+                {
+                    if (haystack[i + j] != needle[j])
+                    {
+                        break;
+                    }
+                }
+
+                if (j == needle.Length)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private string PostJsonOnce(string relativePath, string jsonBody)

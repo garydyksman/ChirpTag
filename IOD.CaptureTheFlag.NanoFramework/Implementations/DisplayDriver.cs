@@ -43,11 +43,18 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private ScreenMode _screenMode = ScreenMode.Message;
 
         // ---------------------------------------------------------------
-        // Layout constants
+        // Layout constants (~30% stats column, ~70% combat list)
         // ---------------------------------------------------------------
 
-        private const int DividerX = 150;
+        private readonly int _dividerX;
+        private readonly int _combatListX;
         private const int CharWidth = 8;
+        /// <summary>Width reserved for the 3-bar signal glyph.</summary>
+        private const int SignalBarBlockW = 16;
+        /// <summary>Space for RSSI text (dBm), e.g. <c>-128</c>, for tuning bar thresholds in the field.</summary>
+        private const int SignalRssiTextW = 40;
+        private const int SignalColumnW = SignalBarBlockW + SignalRssiTextW;
+        private const int UnknownRssi = -200;
 
         private const int HeartX = 4;
         private const int HeartY = 6;
@@ -71,7 +78,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int FlagTextX = FlagX + FlagW + 2;
         private const int FlagTextY = FlagY + 2;
 
-        private const int CombatListX = DividerX + 5;
         private const int CombatListStartY = 6;
         private const int CombatListSpacing = 16;
 
@@ -88,6 +94,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private string _lastCombatTargetName;
         private byte _lastCombatScore;
         private readonly string[] _lastTargets = new string[MaxRenderedTargets];
+        private readonly int[] _lastTargetRssi = new int[MaxRenderedTargets];
         private int _lastTargetCount = 0;
         private int _lastSelectedIndex = 0;
 
@@ -96,7 +103,18 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _display = display;
             _graphics = graphics;
             _font = font;
-            Log($"ctor width={_graphics.Width} height={_graphics.Height} mode={_screenMode}");
+            int w = _graphics.Width;
+            _dividerX = (w * 30) / 100;
+            if (_dividerX < 56)
+                _dividerX = 56;
+            if (_dividerX > w - 56)
+                _dividerX = w - 56;
+
+            _combatListX = _dividerX + 4;
+            for (int i = 0; i < MaxRenderedTargets; i++)
+                _lastTargetRssi[i] = UnknownRssi;
+
+            Log($"ctor width={w} height={_graphics.Height} dividerX={_dividerX} combatListX={_combatListX} mode={_screenMode}");
         }
 
         public void PowerOn()
@@ -159,12 +177,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public void RenderHud(HudData data, string[] targets, int count, int selectedIndex)
         {
+            RenderHud(data, targets, count, selectedIndex, null);
+        }
+
+        public void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi)
+        {
             lock (_lock)
             {
                 Log($"RenderHud+List begin mode={_screenMode} lives={data.Lives} score={data.CombatScore} hasFlag={data.HasFlag} timer={data.Timer} count={count} selected={selectedIndex}");
 
                 _lastHudData = data;
-                CacheTargetsUnsafe(targets, count, selectedIndex);
+                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi);
                 RenderHudFrameUnsafe(data, _lastTargets, _lastTargetCount, _lastSelectedIndex);
                 Log($"RenderHud+List end mode={_screenMode}");
             }
@@ -342,6 +365,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public void UpdateCombatList(string[] targets, int count, int selectedIndex)
         {
+            UpdateCombatList(targets, count, selectedIndex, null);
+        }
+
+        public void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi)
+        {
             lock (_lock)
             {
                 if (VerbosePartialLogging) Log($"UpdateCombatList begin mode={_screenMode} count={count} selected={selectedIndex}");
@@ -351,7 +379,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     return;
                 }
 
-                CacheTargetsUnsafe(targets, count, selectedIndex);
+                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi);
 
                 if (UsePartialHudListRefresh)
                 {
@@ -461,7 +489,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private void RefreshCombatListPartialUnsafe()
         {
             Log("RefreshCombatListPartialUnsafe begin");
-            EraseBlockUnsafe(DividerX + 1, 0, _graphics.Width - DividerX - 1, _graphics.Height);
+            EraseBlockUnsafe(_dividerX + 1, 0, _graphics.Width - _dividerX - 1, _graphics.Height);
             DrawCombatListUnsafe(_lastTargets, _lastTargetCount, _lastSelectedIndex);
             PartialRefreshUnsafe();
             Log("RefreshCombatListPartialUnsafe end");
@@ -490,7 +518,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             BeginFullFrameUnsafe(ScreenMode.Hud, false, "RenderHud");
 
             Log("RenderHudFrameUnsafe draw divider");
-            _graphics.DrawLine(DividerX, 0, DividerX, _graphics.Height, Color.Black);
+            _graphics.DrawLine(_dividerX, 0, _dividerX, _graphics.Height, Color.Black);
 
             Log($"RenderHudFrameUnsafe draw heart state={_heartState}");
             DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, HeartX, HeartY);
@@ -555,19 +583,69 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 if (targets[i] == null)
                     continue;
 
+                int rowY = CombatListStartY + (i * CombatListSpacing);
+                int rssiVal = _lastTargetRssi[i];
+                DrawSignalStrengthUnsafe(_combatListX, rowY + 2, rssiVal);
+                DrawRssiTextUnsafe(_combatListX + SignalBarBlockW, rowY, rssiVal);
+
                 _graphics.DrawText(
                     $"{(i == selectedIndex ? ">" : " ")}{targets[i]}",
                     _font,
-                    CombatListX,
-                    CombatListStartY + (i * CombatListSpacing),
+                    _combatListX + SignalColumnW,
+                    rowY,
                     Color.Black);
             }
         }
 
-        private void CacheTargetsUnsafe(string[] targets, int count, int selectedIndex)
+        /// <summary>Maps RSSI (dBm) to 0–3 filled bars (mobile-style), field-tuned.</summary>
+        private static int RssiToBarCount(int rssi)
+        {
+            if (rssi >= 0 || rssi <= UnknownRssi + 1)
+                return 0;
+            // Stronger than -40 dBm → 3 bars; between -60 and -40 (exclusive of -60) → 2 bars; -60 and weaker → 1 bar
+            if (rssi > -40)
+                return 3;
+            if (rssi > -60)
+                return 2;
+            return 1;
+        }
+
+        private void DrawSignalStrengthUnsafe(int xBase, int yBase, int rssi)
+        {
+            int level = RssiToBarCount(rssi);
+            const int barW = 2;
+            const int gap = 3;
+            int bottom = yBase + 10;
+            for (int b = 0; b < 3; b++)
+            {
+                int h = 4 + (b * 2);
+                int x = xBase + (b * (barW + gap));
+                int y = bottom - h;
+                // Outlined-only rectangles on 1-bit e-paper often read as solid blocks; wipe then fill.
+                _graphics.DrawRectangle(x, y, barW, h, Color.White, true);
+                if (b < level)
+                    _graphics.DrawRectangle(x, y, barW, h, Color.Black, true);
+            }
+        }
+
+        private void DrawRssiTextUnsafe(int x, int y, int rssi)
+        {
+            string label;
+            if (rssi >= 0 || rssi <= UnknownRssi + 1)
+                label = "  ? ";
+            else
+                label = rssi.ToString();
+
+            _graphics.DrawText(label, _font, x, y, Color.Black);
+        }
+
+        private void CacheTargetsUnsafe(string[] targets, int count, int selectedIndex, int[] rssi)
         {
             for (int i = 0; i < MaxRenderedTargets; i++)
+            {
                 _lastTargets[i] = null;
+                _lastTargetRssi[i] = UnknownRssi;
+            }
 
             _lastTargetCount = 0;
             _lastSelectedIndex = selectedIndex;
@@ -584,6 +662,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             for (int i = 0; i < limit; i++)
             {
                 _lastTargets[i] = targets[i];
+                if (rssi != null && i < rssi.Length)
+                    _lastTargetRssi[i] = rssi[i];
                 _lastTargetCount++;
             }
         }
