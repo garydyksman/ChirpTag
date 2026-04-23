@@ -3,6 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
+# Local device / secrets (copy appsettings.sample.json to ChirpTag/appsettings.json)
+ChirpTag/appsettings.json
+
 # User-specific files
 *.rsuser
 *.suo
