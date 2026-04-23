@@ -78,7 +78,10 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <None Include="appsettings.json" />
+    <!-- Gitignored locally; Condition keeps clean clones building. Copied next to deploy output when the file exists. -->
+    <Content Include="appsettings.json" Condition="Exists('$(MSBuildProjectDirectory)\appsettings.json')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
     <None Include="appsettings.sample.json" />
     <None Include="packages.config" />
   </ItemGroup>

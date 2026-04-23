@@ -299,8 +299,19 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                             paintAfterHeartbeat = _hudListPaintAfterPeerHeartbeat;
                         }
 
+                        if (CombatListDiagnostics.Enabled)
+                        {
+                            CombatListDiagnostics.Write(
+                                "UiLoop Hud count=" + count.ToString() + " sel=" + selectedIndex.ToString() + " paintAfterHb=" + (paintAfterHeartbeat ? "1" : "0") + " dirty=" + (_combatListDirty ? "1" : "0"));
+                        }
+
                         bool combatListChanged = HasCombatListChanged(targets, count, selectedIndex, _scratchCombatRssi)
                             || paintAfterHeartbeat;
+                        if (CombatListDiagnostics.Enabled)
+                        {
+                            CombatListDiagnostics.Write("UiLoop listChanged=" + (combatListChanged ? "1" : "0"));
+                        }
+
                         if (_combatListDirty && !combatListChanged)
                         {
                             Log("UiLoop combat list dirty but unchanged; clearing dirty flag");
@@ -481,14 +492,26 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 if (ShouldIgnoreIncomingPacket(message.Payload))
                 {
                     if (VerboseRadioLogging) Log("OnLoRaPacketReceived dropped non-combat packet during combat window");
+                    if (CombatListDiagnostics.Enabled)
+                    {
+                        CombatListDiagnostics.Write(
+                            "LoRa RX ignored (combat radio window) uiMode=" + _uiMode.ToString() + " len=" + message.Payload.Length.ToString());
+                    }
+
                     return;
                 }
 
                 Handler.Handle(message.Payload, message.Rssi, message.Snr);
                 if (VerboseRadioLogging) Log("OnLoRaPacketReceived handled");
             }
-            catch (Exception)
+            catch (Exception ex)
             {
+                Log($"RX failed: {ex.Message}");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    string m = ex.Message != null ? ex.Message : "";
+                    CombatListDiagnostics.Write("LoRa RX exception: " + m);
+                }
             }
         }
 
@@ -499,6 +522,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void OnHeartbeatReceived(byte fromDeviceId, int rssi, float snr)
         {
             if (VerboseRadioLogging) Log($"OnHeartbeatReceived from=0x{fromDeviceId:X2} rssi={rssi} snr={snr} uiMode={_uiMode}");
+            if (CombatListDiagnostics.Enabled)
+            {
+                CombatListDiagnostics.Write(
+                    "Heartbeat UI from=0x" + fromDeviceId.ToString("X2") + " rssi=" + rssi.ToString() + " uiMode=" + _uiMode.ToString() + " hudPaint=" + (_uiMode == UiMode.Hud ? "yes" : "no"));
+            }
+
             _state.UpdatePeer(fromDeviceId, null, rssi, snr);
 
             if (_uiMode == UiMode.Hud)

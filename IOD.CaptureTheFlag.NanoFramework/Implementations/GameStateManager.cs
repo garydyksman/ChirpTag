@@ -88,6 +88,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void ApplyPlayerList(PlayerInfo[] players)
         {
             Log($"ApplyPlayerList begin count={(players == null ? 0 : players.Length)}");
+            int httpPeerRows = 0;
             foreach (PlayerInfo player in players)
             {
                 Log($"ApplyPlayerList player id=0x{player.DeviceId:X2} name={player.Name} team={player.Team} score={player.CombatScore} enemyFlag=0x{player.EnemyFlagId:X2}");
@@ -99,11 +100,18 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 }
                 else
                 {
-                    _playerNames[player.DeviceId] = player.Name;
-                    Log($"ApplyPlayerList stored peer id=0x{player.DeviceId:X2} name={player.Name}");
+                    // Empty names from JSON deserialize as ""; treat like unknown so HUD uses 0xNN fallback.
+                    _playerNames[player.DeviceId] = string.IsNullOrEmpty(player.Name) ? null : player.Name;
+                    httpPeerRows++;
+                    Log($"ApplyPlayerList stored peer id=0x{player.DeviceId:X2} name={(_playerNames[player.DeviceId] ?? "(null)")}");
                 }
             }
             Log("ApplyPlayerList end");
+            if (CombatListDiagnostics.Enabled)
+            {
+                CombatListDiagnostics.Write(
+                    "HTTP roster applied: self=0x" + DeviceId.ToString("X2") + " httpPeerRows=" + httpPeerRows.ToString() + " (names for LoRa ids; list rows still need heartbeat presence)");
+            }
         }
 
         // ---------------------------------------------------------------
@@ -161,8 +169,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void UpdatePeer(byte deviceId, string playerName, int rssi, float snr)
         {
             Log($"UpdatePeer begin device=0x{deviceId:X2} playerName={playerName} rssi={rssi} snr={snr}");
+            if (CombatListDiagnostics.Enabled)
+            {
+                CombatListDiagnostics.Write(
+                    "LoRa presence UpdatePeer id=0x" + deviceId.ToString("X2") + " rssi=" + rssi.ToString() + " rosterName=" + (_playerNames[deviceId] ?? "(null)"));
+            }
+
             // Accept name from heartbeat only if server didn't give us one
-            if (_playerNames[deviceId] == null && playerName != null)
+            if (_playerNames[deviceId] == null && !string.IsNullOrEmpty(playerName))
             {
                 _playerNames[deviceId] = playerName;
                 Log($"UpdatePeer accepted heartbeat name={playerName}");
@@ -215,6 +229,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 }
 
                 Log("RefreshCombatList end state=Dead count=0");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write("Refresh state=Dead targetCount=0 (combat list cleared)");
+                }
+
                 return;
             }
 
@@ -245,7 +264,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     }
 
                     // Store both name and deviceId at same index
-                    _combatTargets[i] = _playerNames[id] ?? $"0x{id:X2}";
+                    _combatTargets[i] = DisplayNameForPeer((byte)id);
                     _combatTargetIds[i] = (byte)id;
                     Log($"RefreshCombatList target index={i} id=0x{id:X2} name={_combatTargets[i]}");
                     i++;
@@ -269,6 +288,58 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 _selectedIndex = 0;
             }
             Log($"RefreshCombatList end count={_combatTargetCount} selected={_selectedIndex}");
+            TraceCombatRefreshSummary();
+        }
+
+        private void TraceCombatRefreshSummary()
+        {
+            if (!CombatListDiagnostics.Enabled)
+            {
+                return;
+            }
+
+            CombatListDiagnostics.Write(
+                "Refresh state=" + State.ToString() + " targetCount=" + _combatTargetCount.ToString() + " selected=" + _selectedIndex.ToString() + " presenceCycle=" + _presenceCycle.ToString());
+
+            lock (_peerLock)
+            {
+                for (int k = 0; k < _combatTargetCount && k < MaxPlayers; k++)
+                {
+                    byte id = _combatTargetIds[k];
+                    int rssi = _peerLastRssi[id];
+                    string label = _combatTargets[k] ?? "";
+                    CombatListDiagnostics.Write(
+                        "  row[" + k.ToString() + "] id=0x" + id.ToString("X2") + " rssi=" + rssi.ToString() + " label=" + label);
+                }
+
+                if (_combatTargetCount == 0)
+                {
+                    int heard = 0;
+                    int weak = 0;
+                    for (int id = 0; id < MaxDeviceId; id++)
+                    {
+                        if (id == DeviceId)
+                        {
+                            continue;
+                        }
+
+                        if (_lastSeen[id] == 0)
+                        {
+                            continue;
+                        }
+
+                        heard++;
+                        int r = _peerLastRssi[id];
+                        if (r != UnknownRssiDbm && r <= WeakLinkHideFromCombatListDbm)
+                        {
+                            weak++;
+                        }
+                    }
+
+                    CombatListDiagnostics.Write(
+                        "  no rows: LoRa ids with presence=" + heard.ToString() + " of those weakRssiSkip<=" + WeakLinkHideFromCombatListDbm.ToString() + " =" + weak.ToString());
+                }
+            }
         }
 
         // ---------------------------------------------------------------
@@ -352,8 +423,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public string GetPlayerName(byte deviceId)
         {
+            return DisplayNameForPeer(deviceId);
+        }
+
+        /// <summary>Roster name if present and non-empty; otherwise a stable hex label for the device.</summary>
+        private string DisplayNameForPeer(byte deviceId)
+        {
             string name = _playerNames[deviceId];
-            return name ?? $"0x{deviceId:X2}";
+            return string.IsNullOrEmpty(name) ? $"0x{deviceId:X2}" : name;
         }
 
         // ---------------------------------------------------------------

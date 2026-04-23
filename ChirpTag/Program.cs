@@ -344,12 +344,18 @@ namespace ChirpTag
             Log("[Program] LoRa Reset");
             lora.Reset();
             Log("[Program] LoRa Initialise");
-            lora.Initialise();
+            lora.Initialize();
 
             Log("[Program] Phase 3 create GameStateManager");
             var state = new GameStateManager(deviceId: setup.DeviceId, playerName: apiPlayerName);
             Log("[Program] Phase 3 ApplyPlayerList");
             state.ApplyPlayerList(active.Players);
+            if (CombatListDiagnostics.Enabled && active.Players != null)
+            {
+                CombatListDiagnostics.Write(
+                    "[Program] Phase3 HTTP Active roster length=" + active.Players.Length.ToString());
+            }
+
             Log("[Program] Phase 3 SetState Active");
             state.SetState(GameState.Active);
 

@@ -2,13 +2,15 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Text;
+using IOD.CaptureTheFlag.NanoFramework.Implementations;
 using nanoFramework.Json;
 
 namespace ChirpTag
 {
     /// <summary>
-    /// Loads <see cref="ChirpTagSettings"/> from built-in JSON (<see cref="AppSettingsBuiltIn"/>), then optionally merges <c>I:\appsettings.json</c> when present.
-    /// Later: branch to try DI and nanoFramework 2.0 preview when ready.
+    /// Loads <see cref="ChirpTagSettings"/> from built-in JSON (<see cref="AppSettingsBuiltIn"/>), then optionally merges
+    /// <see cref="DefaultConfigPath"/> when present. Does not auto-merge a CWD <c>appsettings.json</c>: a partial or empty
+    /// file next to the PE would deserialize with default bools and empty strings and wipe built-in settings.
     /// </summary>
     public static class ChirpTagConfigLoader
     {
@@ -31,6 +33,15 @@ namespace ChirpTag
             {
                 TryLoadFromPath(p);
             }
+
+            string url = ChirpTagSettings.GameApiBaseUrl;
+            int urlLen = url == null ? 0 : url.Length;
+            string pn = ChirpTagSettings.PlayerName;
+            int pnLen = pn == null ? 0 : pn.Length;
+            string ssid = ChirpTagSettings.WifiSsid;
+            int ssidLen = ssid == null ? 0 : ssid.Length;
+            DebugLog.Write(
+                "[Config] TryLoad merged playerNameLen=" + pnLen.ToString() + " urlLen=" + urlLen.ToString() + " wifiSsidLen=" + ssidLen.ToString() + " sslNoVerify=" + (ChirpTagSettings.GameApiSslNoVerify ? "1" : "0"));
         }
 
         private static void TryLoadBuiltIn()
@@ -101,24 +112,29 @@ namespace ChirpTag
 
         private static void ApplyDto(AppSettingsJson dto)
         {
-            if (dto.PlayerName != null)
+            // Only overwrite when the overlay supplies a real value. JSON "" or a partial file must not
+            // erase built-in strings; omitted bools deserialize as false and must not wipe prior true.
+            string pn = dto.PlayerName == null ? string.Empty : dto.PlayerName.Trim();
+            if (pn.Length > 0)
             {
-                ChirpTagSettings.PlayerName = dto.PlayerName;
+                ChirpTagSettings.PlayerName = pn;
             }
 
-            if (dto.WifiSsid != null)
+            string ssid = dto.WifiSsid == null ? string.Empty : dto.WifiSsid.Trim();
+            if (ssid.Length > 0)
             {
-                ChirpTagSettings.WifiSsid = dto.WifiSsid;
+                ChirpTagSettings.WifiSsid = ssid;
             }
 
-            if (dto.WifiPassword != null)
+            if (!string.IsNullOrEmpty(dto.WifiPassword))
             {
                 ChirpTagSettings.WifiPassword = dto.WifiPassword;
             }
 
-            if (dto.GameApiBaseUrl != null)
+            string url = dto.GameApiBaseUrl == null ? string.Empty : dto.GameApiBaseUrl.Trim();
+            if (url.Length > 0)
             {
-                ChirpTagSettings.GameApiBaseUrl = dto.GameApiBaseUrl;
+                ChirpTagSettings.GameApiBaseUrl = url;
             }
 
             ChirpTagSettings.GameApiSslNoVerify = dto.GameApiSslNoVerify;

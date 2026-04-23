@@ -96,6 +96,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     }
                 }
 
+                if (CombatListDiagnostics.Enabled && (players.Length > 0 || status == GameStatus.Active))
+                {
+                    CombatListDiagnostics.Write(
+                        "[HTTP] GetCurrentGame status=" + ((int)status).ToString() + " players=" + players.Length.ToString());
+                }
+
                 return new GameInfo { Status = status, Players = players };
             }
             catch (Exception ex)

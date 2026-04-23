@@ -376,7 +376,19 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 if (_screenMode != ScreenMode.Hud)
                 {
                     if (VerbosePartialLogging) Log("UpdateCombatList ignored because mode is not Hud");
+                    if (CombatListDiagnostics.Enabled)
+                    {
+                        CombatListDiagnostics.Write(
+                            "Display UpdateCombatList skipped: screenMode=" + _screenMode.ToString() + " count=" + count.ToString());
+                    }
+
                     return;
+                }
+
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write(
+                        "Display UpdateCombatList drawing count=" + count.ToString() + " sel=" + selectedIndex.ToString());
                 }
 
                 CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi);

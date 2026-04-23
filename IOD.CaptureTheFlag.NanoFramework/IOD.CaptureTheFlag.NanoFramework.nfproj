@@ -23,6 +23,7 @@
     <Compile Include="Enum\UiMode.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Implementations\DisplayDriver.cs" />
+    <Compile Include="Implementations\CombatListDiagnostics.cs" />
     <Compile Include="Implementations\DebugLog.cs" />
     <Compile Include="Implementations\GameDevice.cs" />
     <Compile Include="Implementations\GamerDevice.cs" />
