@@ -41,7 +41,7 @@ namespace ChirpTag
             string ssid = ChirpTagSettings.WifiSsid;
             int ssidLen = ssid == null ? 0 : ssid.Length;
             DebugLog.Write(
-                "[Config] TryLoad merged playerNameLen=" + pnLen.ToString() + " urlLen=" + urlLen.ToString() + " wifiSsidLen=" + ssidLen.ToString() + " sslNoVerify=" + (ChirpTagSettings.GameApiSslNoVerify ? "1" : "0"));
+                "[Config] TryLoad merged playerNameLen=" + pnLen.ToString() + " urlLen=" + urlLen.ToString() + " wifiSsidLen=" + ssidLen.ToString() + " sslNoVerify=" + (ChirpTagSettings.GameApiSslNoVerify ? "1" : "0") + " ignoreAttackRangeLimit=" + (ChirpTagSettings.IgnoreAttackRangeLimit ? "1" : "0"));
         }
 
         private static void TryLoadBuiltIn()
@@ -55,7 +55,10 @@ namespace ChirpTag
                     return;
                 }
 
-                ApplyJsonText(text, "built-in appsettings");
+                if (!ApplyJsonText(text, "built-in appsettings"))
+                {
+                    Debug.WriteLine("[Config] built-in apply failed (see parse failed line)");
+                }
             }
             catch (Exception ex)
             {
@@ -86,10 +89,11 @@ namespace ChirpTag
                     }
 
                     string text = Encoding.UTF8.GetString(buf, 0, len);
-                    ApplyJsonText(text, p);
+                    if (ApplyJsonText(text, p))
+                    {
+                        Debug.WriteLine("[Config] merged " + p);
+                    }
                 }
-
-                Debug.WriteLine("[Config] merged " + p);
             }
             catch (Exception ex)
             {
@@ -97,17 +101,27 @@ namespace ChirpTag
             }
         }
 
-        private static void ApplyJsonText(string text, string sourceLabel)
+        /// <returns><c>false</c> if JSON cannot be deserialized (wrong types, corrupt file); built-in values are unchanged for that overlay.</returns>
+        private static bool ApplyJsonText(string text, string sourceLabel)
         {
-            object parsed = JsonConvert.DeserializeObject(text, typeof(AppSettingsJson), JsonOptions);
-            var dto = (AppSettingsJson)parsed;
-            if (dto == null)
+            try
             {
-                Debug.WriteLine("[Config] parse null (" + sourceLabel + ")");
-                return;
-            }
+                object parsed = JsonConvert.DeserializeObject(text, typeof(AppSettingsJson), JsonOptions);
+                var dto = (AppSettingsJson)parsed;
+                if (dto == null)
+                {
+                    Debug.WriteLine("[Config] parse null (" + sourceLabel + ")");
+                    return false;
+                }
 
-            ApplyDto(dto);
+                ApplyDto(dto);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[Config] parse failed (" + sourceLabel + "): " + ex.GetType().Name + " " + ex.Message);
+                return false;
+            }
         }
 
         private static void ApplyDto(AppSettingsJson dto)
@@ -139,6 +153,7 @@ namespace ChirpTag
 
             ChirpTagSettings.GameApiSslNoVerify = dto.GameApiSslNoVerify;
             ChirpTagSettings.AllowHudWithoutValidDeviceId = dto.AllowHudWithoutValidDeviceId;
+            ChirpTagSettings.IgnoreAttackRangeLimit = dto.IgnoreAttackRangeLimit;
         }
     }
 }

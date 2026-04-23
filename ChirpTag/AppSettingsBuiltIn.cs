@@ -8,6 +8,6 @@ namespace ChirpTag
     internal static class AppSettingsBuiltIn
     {
         internal const string Json =
-            "{\"playerName\":\"Jessica\",\"wifiSsid\":\"Odido-062073\",\"wifiPassword\":\"WLNYR58VQ5UGBUB5\",\"gameApiBaseUrl\":\"https://5mbvq3sq-5096.euw.devtunnels.ms\",\"gameApiSslNoVerify\":true,\"allowHudWithoutValidDeviceId\":false}";
+            "{\"playerName\":\"Jessica\",\"wifiSsid\":\"Odido-062073\",\"wifiPassword\":\"WLNYR58VQ5UGBUB5\",\"gameApiBaseUrl\":\"https://5mbvq3sq-5096.euw.devtunnels.ms\",\"gameApiSslNoVerify\":true,\"allowHudWithoutValidDeviceId\":false,\"ignoreAttackRangeLimit\":false}";
     }
 }

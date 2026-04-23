@@ -35,6 +35,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private readonly int[] _peerLastRssi = new int[MaxDeviceId];
         private int _presenceCycle = 1;
 
+        /// <summary>When <c>true</c>, weak-RSSI peers are still included in the combat list (see <see cref="WeakLinkHideFromCombatListDbm"/>).</summary>
+        private readonly bool _ignoreAttackRangeLimit;
+
         // ---------------------------------------------------------------
         // Thread safety — LoRa poll thread writes, heartbeat thread reads
         // ---------------------------------------------------------------
@@ -69,10 +72,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public string Timer { get; private set; }
         public int SelectedIndex => _selectedIndex;
 
-        public GameStateManager(byte deviceId, string playerName)
+        public GameStateManager(byte deviceId, string playerName, bool ignoreAttackRangeLimit = false)
         {
             DeviceId = deviceId;
             PlayerName = playerName;
+            _ignoreAttackRangeLimit = ignoreAttackRangeLimit;
             Lives = 1;
             State = GameState.Idle;
             Timer = "00:00";
@@ -257,7 +261,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     }
 
                     int rssi = _peerLastRssi[id];
-                    if (rssi != UnknownRssiDbm && rssi <= WeakLinkHideFromCombatListDbm)
+                    if (!_ignoreAttackRangeLimit && rssi != UnknownRssiDbm && rssi <= WeakLinkHideFromCombatListDbm)
                     {
                         Log($"RefreshCombatList skip weak signal id=0x{id:X2} rssi={rssi}");
                         continue;

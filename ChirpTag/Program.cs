@@ -347,7 +347,10 @@ namespace ChirpTag
             lora.Initialize();
 
             Log("[Program] Phase 3 create GameStateManager");
-            var state = new GameStateManager(deviceId: setup.DeviceId, playerName: apiPlayerName);
+            var state = new GameStateManager(
+                deviceId: setup.DeviceId,
+                playerName: apiPlayerName,
+                ignoreAttackRangeLimit: ChirpTagSettings.IgnoreAttackRangeLimit);
             Log("[Program] Phase 3 ApplyPlayerList");
             state.ApplyPlayerList(active.Players);
             if (CombatListDiagnostics.Enabled && active.Players != null)

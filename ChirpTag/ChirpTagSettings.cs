@@ -17,5 +17,8 @@ namespace ChirpTag
 
         /// <summary>Same meaning as the former Program constant (testing only).</summary>
         public static bool AllowHudWithoutValidDeviceId;
+
+        /// <summary>When <c>true</c>, skip RSSI-based exclusion so any heard peer can be selected for attack.</summary>
+        public static bool IgnoreAttackRangeLimit;
     }
 }
