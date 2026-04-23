@@ -176,7 +176,7 @@ namespace ChirpTag
             if (gameApiBaseUrl.Length == 0)
             {
                 driver.ShowMessage("Missing config", "gameApiBaseUrl");
-                Log("[Program] halt: set gameApiBaseUrl in appsettings.json (embedded) or " + ChirpTagConfigLoader.DefaultConfigPath);
+                Log("[Program] halt: set gameApiBaseUrl in AppSettingsBuiltIn / appsettings.json or " + ChirpTagConfigLoader.DefaultConfigPath);
                 while (true)
                 {
                     Thread.Sleep(60_000);

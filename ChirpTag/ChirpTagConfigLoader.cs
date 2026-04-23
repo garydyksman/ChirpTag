@@ -1,14 +1,13 @@
 using System;
 using System.Diagnostics;
 using System.IO;
-using System.Reflection;
 using System.Text;
 using nanoFramework.Json;
 
 namespace ChirpTag
 {
     /// <summary>
-    /// Loads <see cref="ChirpTagSettings"/> from an embedded <c>appsettings.json</c>, then optionally merges <c>I:\appsettings.json</c> when present.
+    /// Loads <see cref="ChirpTagSettings"/> from built-in JSON (<see cref="AppSettingsBuiltIn"/>), then optionally merges <c>I:\appsettings.json</c> when present.
     /// Later: branch to try DI and nanoFramework 2.0 preview when ready.
     /// </summary>
     public static class ChirpTagConfigLoader
@@ -18,15 +17,15 @@ namespace ChirpTag
             PropertyNameCaseInsensitive = true,
         };
 
-        /// <summary>Optional overlay on device flash (SPIFFS); merges over embedded values.</summary>
+        /// <summary>Optional overlay on device flash (SPIFFS); merges over built-in values.</summary>
         public const string DefaultConfigPath = "I:\\appsettings.json";
 
         private const int MaxConfigBytes = 8192;
 
-        /// <summary>Loads embedded JSON, then merges file at <paramref name="path"/> if it exists.</summary>
+        /// <summary>Loads built-in defaults, then merges file at <paramref name="path"/> if it exists.</summary>
         public static void TryLoad(string path = null)
         {
-            TryLoadEmbedded();
+            TryLoadBuiltIn();
             string p = path ?? DefaultConfigPath;
             if (File.Exists(p))
             {
@@ -34,33 +33,22 @@ namespace ChirpTag
             }
         }
 
-        private static void TryLoadEmbedded()
+        private static void TryLoadBuiltIn()
         {
             try
             {
-                Assembly asm = Assembly.GetExecutingAssembly();
-                string resName = ResolveEmbeddedAppSettingsName(asm);
-                using (Stream s = resName == null ? null : asm.GetManifestResourceStream(resName))
+                string text = AppSettingsBuiltIn.Json;
+                if (text == null || text.Length == 0)
                 {
-                    if (s == null)
-                    {
-                        Debug.WriteLine("[Config] missing embedded appsettings.json (manifest)");
-                        return;
-                    }
-
-                    string text = ReadUtf8StreamUpTo(s, MaxConfigBytes);
-                    if (text == null || text.Length == 0)
-                    {
-                        Debug.WriteLine("[Config] embedded empty");
-                        return;
-                    }
-
-                    ApplyJsonText(text, "embedded appsettings.json");
+                    Debug.WriteLine("[Config] built-in empty");
+                    return;
                 }
+
+                ApplyJsonText(text, "built-in appsettings");
             }
             catch (Exception ex)
             {
-                Debug.WriteLine("[Config] embedded " + ex.Message);
+                Debug.WriteLine("[Config] built-in " + ex.Message);
             }
         }
 
@@ -96,29 +84,6 @@ namespace ChirpTag
             {
                 Debug.WriteLine("[Config] file " + ex.Message);
             }
-        }
-
-        private static string ReadUtf8StreamUpTo(Stream s, int maxBytes)
-        {
-            byte[] buf = new byte[maxBytes];
-            int total = 0;
-            while (total < maxBytes)
-            {
-                int n = s.Read(buf, total, maxBytes - total);
-                if (n <= 0)
-                {
-                    break;
-                }
-
-                total += n;
-            }
-
-            if (total == 0)
-            {
-                return string.Empty;
-            }
-
-            return Encoding.UTF8.GetString(buf, 0, total);
         }
 
         private static void ApplyJsonText(string text, string sourceLabel)
@@ -158,35 +123,6 @@ namespace ChirpTag
 
             ChirpTagSettings.GameApiSslNoVerify = dto.GameApiSslNoVerify;
             ChirpTagSettings.AllowHudWithoutValidDeviceId = dto.AllowHudWithoutValidDeviceId;
-        }
-
-        private static string ResolveEmbeddedAppSettingsName(Assembly asm)
-        {
-            const string primary = "ChirpTag.appsettings.json";
-            string[] names = asm.GetManifestResourceNames();
-            if (names == null)
-            {
-                return null;
-            }
-
-            for (int i = 0; i < names.Length; i++)
-            {
-                if (names[i] == primary)
-                {
-                    return primary;
-                }
-            }
-
-            for (int i = 0; i < names.Length; i++)
-            {
-                string n = names[i];
-                if (n != null && n.EndsWith("appsettings.json"))
-                {
-                    return n;
-                }
-            }
-
-            return null;
         }
     }
 }

@@ -24,7 +24,7 @@ namespace ChirpTag
     /// </summary>
     public static class WiFiBootstrap
     {
-        /// <summary>WPA2-PSK credentials come from <see cref="ChirpTagSettings"/> (embedded <c>appsettings.json</c>, optional <c>I:\appsettings.json</c> merge). Empty SSID skips Wi-Fi.</summary>
+        /// <summary>WPA2-PSK credentials come from <see cref="ChirpTagSettings"/> (built-in defaults + optional <c>I:\appsettings.json</c>). Empty SSID skips Wi-Fi.</summary>
 
         /// <summary>Delay after power rails / pin mux so Wi-Fi can start cleanly.</summary>
         public const int RadioSettleMs = 500;

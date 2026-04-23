@@ -18,6 +18,7 @@
   </PropertyGroup>
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.props" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.props')" />
   <ItemGroup>
+    <Compile Include="AppSettingsBuiltIn.cs" />
     <Compile Include="AppSettingsJson.cs" />
     <Compile Include="ChirpTagConfigLoader.cs" />
     <Compile Include="ChirpTagSettings.cs" />
@@ -77,7 +78,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="appsettings.json" />
+    <None Include="appsettings.json" />
     <None Include="appsettings.sample.json" />
     <None Include="packages.config" />
   </ItemGroup>
