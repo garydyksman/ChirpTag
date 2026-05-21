@@ -23,7 +23,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (VerboseLogging) Log("ExpectedLength");
             switch (msgType)
             {
-                case PacketType.Heartbeat: return 4;  // header + crc
+                case PacketType.Heartbeat: return 5;  // + deviceType
                 case PacketType.Attack: return 4;
                 case PacketType.Capture: return 4;
                 case PacketType.RespawnReq: return 4;

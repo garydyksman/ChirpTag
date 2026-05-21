@@ -40,6 +40,8 @@ namespace ChirpTag
 
         /// <summary>Pause after <see cref="WifiAdapter.Connect"/> success to allow DHCP.</summary>
         public const int PostConnectDhcpPauseMs = 2_000;
+        private const int ConnectMaxAttempts = 3;
+        private const int ConnectRetryDelayMs = 5_000;
 
         private static ManualResetEvent _scanCompleteSignal;
 
@@ -67,7 +69,23 @@ namespace ChirpTag
             Debug.WriteLine("[WiFi] start");
             Thread.Sleep(RadioSettleMs);
 
-            return TryConnectViaScan();
+            for (int attempt = 1; attempt <= ConnectMaxAttempts; attempt++)
+            {
+                Debug.WriteLine("[WiFi] attempt " + attempt.ToString());
+                WifiBootOutcome outcome = TryConnectViaScan();
+                if (outcome == WifiBootOutcome.Connected)
+                {
+                    return outcome;
+                }
+
+                TearDownRadio();
+                if (attempt < ConnectMaxAttempts)
+                {
+                    Thread.Sleep(ConnectRetryDelayMs);
+                }
+            }
+
+            return WifiBootOutcome.Failed;
         }
 
         /// <summary>

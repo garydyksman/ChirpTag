@@ -82,7 +82,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int FlagTextY = FlagY + 2;
 
         private const int CombatListStartY = HudContentTopY;
-        private const int CombatListSpacing = 14;
+        private const int CombatListSpacing = 16;
 
         private const int SkullW = 24;
         private const int SkullH = 20;
@@ -98,6 +98,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private byte _lastCombatScore;
         private readonly string[] _lastTargets = new string[MaxRenderedTargets];
         private readonly int[] _lastTargetRssi = new int[MaxRenderedTargets];
+        private readonly byte[] _lastTargetTypes = new byte[MaxRenderedTargets];
         private int _lastTargetCount = 0;
         private int _lastSelectedIndex = 0;
 
@@ -116,6 +117,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _combatListX = _dividerX + 4;
             for (int i = 0; i < MaxRenderedTargets; i++)
                 _lastTargetRssi[i] = UnknownRssi;
+            for (int i = 0; i < MaxRenderedTargets; i++)
+                _lastTargetTypes[i] = DeviceType.Player;
 
             Log($"ctor width={w} height={_graphics.Height} dividerX={_dividerX} combatListX={_combatListX} mode={_screenMode}");
         }
@@ -185,12 +188,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi)
         {
+            RenderHud(data, targets, count, selectedIndex, targetRssi, null);
+        }
+
+        public void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes)
+        {
             lock (_lock)
             {
                 Log($"RenderHud+List begin mode={_screenMode} lives={data.Lives} score={data.CombatScore} hasFlag={data.HasFlag} timer={data.Timer} count={count} selected={selectedIndex}");
 
                 _lastHudData = data;
-                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi);
+                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi, targetTypes);
                 RenderHudFrameUnsafe(data, _lastTargets, _lastTargetCount, _lastSelectedIndex);
                 Log($"RenderHud+List end mode={_screenMode}");
             }
@@ -373,6 +381,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi)
         {
+            UpdateCombatList(targets, count, selectedIndex, targetRssi, null);
+        }
+
+        public void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes)
+        {
             lock (_lock)
             {
                 if (VerbosePartialLogging) Log($"UpdateCombatList begin mode={_screenMode} count={count} selected={selectedIndex}");
@@ -394,7 +407,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         "Display UpdateCombatList drawing count=" + count.ToString() + " sel=" + selectedIndex.ToString());
                 }
 
-                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi);
+                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi, targetTypes);
 
                 if (UsePartialHudListRefresh)
                 {
@@ -608,12 +621,18 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 DrawSignalStrengthUnsafe(_combatListX, rowY + 2, rssiVal);
                 DrawRssiTextUnsafe(_combatListX + SignalBarBlockW, rowY, rssiVal);
 
-                _graphics.DrawText(
-                    $"{(i == selectedIndex ? ">" : " ")}{targets[i]}",
-                    _font,
-                    _combatListX + SignalColumnW,
-                    rowY,
-                    Color.Black);
+                int labelX = _combatListX + SignalColumnW;
+                _graphics.DrawText(i == selectedIndex ? ">" : " ", _font, labelX, rowY, Color.Black);
+
+                if (_lastTargetTypes[i] == DeviceType.FlagNode)
+                {
+                    DrawBitmapUnsafe(Icons.Flag, Icons.FlagWidth, labelX + CharWidth, rowY, Color.Black);
+                    _graphics.DrawText(targets[i], _font, labelX + CharWidth + Icons.FlagWidth + 2, rowY, Color.Black);
+                }
+                else
+                {
+                    _graphics.DrawText(targets[i], _font, labelX + CharWidth, rowY, Color.Black);
+                }
             }
         }
 
@@ -622,12 +641,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             if (rssi >= 0 || rssi <= UnknownRssi + 1)
                 return 0;
-            // Stronger than -40 dBm → 3 bars; between -60 and -40 (exclusive of -60) → 2 bars; -60 and weaker → 1 bar
-            if (rssi > -40)
+            // Field-tuned for antennas enclosed in printed cases.
+            if (rssi > -65)
                 return 3;
-            if (rssi > -60)
+            if (rssi > -85)
                 return 2;
-            return 1;
+            if (rssi > -105)
+                return 1;
+            return 0;
         }
 
         private void DrawSignalStrengthUnsafe(int xBase, int yBase, int rssi)
@@ -659,12 +680,13 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _graphics.DrawText(label, _font, x, y, Color.Black);
         }
 
-        private void CacheTargetsUnsafe(string[] targets, int count, int selectedIndex, int[] rssi)
+        private void CacheTargetsUnsafe(string[] targets, int count, int selectedIndex, int[] rssi, byte[] targetTypes)
         {
             for (int i = 0; i < MaxRenderedTargets; i++)
             {
                 _lastTargets[i] = null;
                 _lastTargetRssi[i] = UnknownRssi;
+                _lastTargetTypes[i] = DeviceType.Player;
             }
 
             _lastTargetCount = 0;
@@ -684,6 +706,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 _lastTargets[i] = targets[i];
                 if (rssi != null && i < rssi.Length)
                     _lastTargetRssi[i] = rssi[i];
+                if (targetTypes != null && i < targetTypes.Length)
+                    _lastTargetTypes[i] = targetTypes[i];
                 _lastTargetCount++;
             }
         }
@@ -702,13 +726,18 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         private void DrawBitmapUnsafe(ushort[] bitmap, int width, int x, int y)
         {
+            DrawBitmapUnsafe(bitmap, width, x, y, Color.Black);
+        }
+
+        private void DrawBitmapUnsafe(ushort[] bitmap, int width, int x, int y, Color color)
+        {
             for (int row = 0; row < bitmap.Length; row++)
             {
                 ushort bits = bitmap[row];
                 for (int col = 0; col < width; col++)
                 {
                     if ((bits & (1 << (width - col - 1))) != 0)
-                        _graphics.DrawPixel(x + col, y + row, Color.Black);
+                        _graphics.DrawPixel(x + col, y + row, color);
                 }
             }
         }

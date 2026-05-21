@@ -2,7 +2,7 @@
 {
     public interface IPacketBuilder
     {
-        IPacket Heartbeat(byte deviceId);
+        IPacket Heartbeat(byte deviceId, byte deviceType);
         IPacket Attack(byte deviceId, byte targetId);
         IPacket AttackAck(byte deviceId, byte targetId, byte combatScore);
         IPacket CombatResult(byte deviceId, byte targetId, byte winnerId);

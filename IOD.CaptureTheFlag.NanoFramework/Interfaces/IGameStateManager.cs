@@ -36,7 +36,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         void UpdateTimer(string timer);
 
         // ---- Peer tracking ----
-        void UpdatePeer(byte deviceId, string playerName, int rssi, float snr);
+        void UpdatePeer(byte deviceId, string playerName, byte deviceType, int rssi, float snr);
         void RemovePeer(byte deviceId);
 
         /// <summary>
@@ -58,6 +58,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         /// Unknown entries use -200. Call <see cref="RefreshCombatList"/> first.
         /// </summary>
         void CopyCombatTargetRssi(int[] dest, int maxCount);
+        void CopyCombatTargetTypes(byte[] dest, int maxCount);
 
         /// <summary>
         /// Builds PeerInfo array from current combat list.

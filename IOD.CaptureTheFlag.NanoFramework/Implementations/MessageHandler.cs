@@ -108,7 +108,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 case PacketType.Heartbeat:
                     if (VerboseLogging) Log("Handle dispatch HeartbeatReceived");
-                    HeartbeatReceived?.Invoke(fromDeviceId, rssi, snr);
+                    HeartbeatReceived?.Invoke(fromDeviceId, raw[3], rssi, snr);
                     break;
 
                 case PacketType.GameStart:

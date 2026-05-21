@@ -7,8 +7,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
     {
         private static readonly byte[] EmptyData = new byte[0];
 
-        public IPacket Heartbeat(byte deviceId)
-            => new Packet(deviceId, PacketType.Heartbeat, 0x00, EmptyData);
+        public IPacket Heartbeat(byte deviceId, byte deviceType)
+            => new Packet(deviceId, PacketType.Heartbeat, 0x00, new byte[] { deviceType });
 
         public IPacket Attack(byte deviceId, byte targetId)
             => new Packet(deviceId, PacketType.Attack, targetId, EmptyData);

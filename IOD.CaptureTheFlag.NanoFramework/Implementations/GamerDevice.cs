@@ -81,6 +81,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private bool _combatResolved = true;
         private string _combatTarget = null;
         private byte _combatTargetDeviceId = 0;
+        private byte _pendingCombatWinnerId;
+        private byte _pendingCombatLoserId;
+        private bool _pendingCombatLoserHadKey;
+        private byte[] _pendingDeliverKey;
         private UiMode _uiMode = UiMode.Message;
 
         // ---------------------------------------------------------------
@@ -90,7 +94,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         private readonly string[] _lastRenderedTargets = new string[MaxRenderedTargets];
         private readonly int[] _lastRenderedRssi = new int[MaxRenderedTargets];
+        private readonly byte[] _lastRenderedTypes = new byte[MaxRenderedTargets];
         private readonly int[] _scratchCombatRssi = new int[MaxRenderedTargets];
+        private readonly byte[] _scratchCombatTypes = new byte[MaxRenderedTargets];
         private int _lastRenderedCount = -1;
         private int _lastRenderedSelectedIndex = -1;
 
@@ -164,7 +170,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _pauseLoRaForWifi = pauseLoRaForWifi;
             _resumeLoRaAfterWifi = resumeLoRaAfterWifi;
 
-            _heartbeatBytes = builder.Heartbeat(state.DeviceId).ToBytes();
+            _heartbeatBytes = builder.Heartbeat(state.DeviceId, IOD.CaptureTheFlag.NanoFramework.Types.DeviceType.Player).ToBytes();
             if (VerboseByteLogging)
                 Log("ctor heartbeatBytes prepared");
 
@@ -172,6 +178,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 _lastRenderedRssi[i] = UnknownCombatRssi;
                 _scratchCombatRssi[i] = UnknownCombatRssi;
+                _lastRenderedTypes[i] = IOD.CaptureTheFlag.NanoFramework.Types.DeviceType.Player;
+                _scratchCombatTypes[i] = IOD.CaptureTheFlag.NanoFramework.Types.DeviceType.Player;
             }
 
             long nowTick = DateTime.UtcNow.Ticks;
@@ -291,6 +299,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         string[] targets = _state.GetCombatTargets(out int count);
                         int selectedIndex = _state.SelectedIndex;
                         _state.CopyCombatTargetRssi(_scratchCombatRssi, MaxRenderedTargets);
+                        _state.CopyCombatTargetTypes(_scratchCombatTypes, MaxRenderedTargets);
                         if (VerboseTickLogging) Log($"UiLoop targets count={count} selected={selectedIndex}");
 
                         bool paintAfterHeartbeat;
@@ -305,7 +314,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                                 "UiLoop Hud count=" + count.ToString() + " sel=" + selectedIndex.ToString() + " paintAfterHb=" + (paintAfterHeartbeat ? "1" : "0") + " dirty=" + (_combatListDirty ? "1" : "0"));
                         }
 
-                        bool combatListChanged = HasCombatListChanged(targets, count, selectedIndex, _scratchCombatRssi)
+                        bool combatListChanged = HasCombatListChanged(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes)
                             || paintAfterHeartbeat;
                         if (CombatListDiagnostics.Enabled)
                         {
@@ -321,9 +330,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         if (combatListChanged)
                         {
                             Log("UiLoop rendering combat list");
-                            _display.UpdateCombatList(targets, count, selectedIndex, _scratchCombatRssi);
+                            _display.UpdateCombatList(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
                             MarkDisplayActivity("combat-list");
-                            CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi);
+                            CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
                             _combatListDirty = false;
                             lock (_crossThreadSignalLock)
                             {
@@ -403,6 +412,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Log("Attack ignored - no target selected");
                 _combatListDirty = true;
+                return;
+            }
+
+            if (target.DeviceType == IOD.CaptureTheFlag.NanoFramework.Types.DeviceType.FlagNode)
+            {
+                InteractWithFlagNode(target.DeviceId);
                 return;
             }
 
@@ -519,7 +534,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // Message handlers
         // ---------------------------------------------------------------
 
-        public void OnHeartbeatReceived(byte fromDeviceId, int rssi, float snr)
+        public void OnHeartbeatReceived(byte fromDeviceId, byte deviceType, int rssi, float snr)
         {
             if (VerboseRadioLogging) Log($"OnHeartbeatReceived from=0x{fromDeviceId:X2} rssi={rssi} snr={snr} uiMode={_uiMode}");
             if (CombatListDiagnostics.Enabled)
@@ -528,7 +543,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     "Heartbeat UI from=0x" + fromDeviceId.ToString("X2") + " rssi=" + rssi.ToString() + " uiMode=" + _uiMode.ToString() + " hudPaint=" + (_uiMode == UiMode.Hud ? "yes" : "no"));
             }
 
-            _state.UpdatePeer(fromDeviceId, null, rssi, snr);
+            _state.UpdatePeer(fromDeviceId, null, deviceType, rssi, snr);
 
             if (_uiMode == UiMode.Hud)
             {
@@ -606,15 +621,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 _display.ShowCombatResult(true, _combatTarget);
                 MarkDisplayActivity("combat-result-win");
 
-                new Thread(() =>
-                {
-                    Log($"OnAttackAckReceived win delay sleep={CombatResultDelayMs}");
-                    Thread.Sleep(CombatResultDelayMs);
-                    _combatTarget = null;
-                    _combatTargetDeviceId = 0;
-                    Log("OnAttackAckReceived win delay entering HUD");
-                    EnterHud();
-                }).Start();
+                StartDeferredHud();
             }
             else
             {
@@ -622,19 +629,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 byte defenderId = fromDeviceId;
                 QueuePacket(_builder.CombatResult(DeviceId, defenderId, defenderId));
 
+                bool loserHadKey = _state.HasFlag;
+                if (loserHadKey)
+                    _state.DropFlag();
                 _state.TakeDamage();
+                StartReportCombat(defenderId, DeviceId, loserHadKey);
                 _uiMode = UiMode.CombatResult;
                 Log($"OnAttackAckReceived ShowCombatResult lost uiMode={_uiMode} lives={_state.Lives} state={_state.State}");
                 _display.ShowCombatResult(false, _combatTarget);
                 MarkDisplayActivity("combat-result-loss");
 
-                new Thread(() =>
-                {
-                    Log($"OnAttackAckReceived lose delay sleep={CombatResultDelayMs}");
-                    Thread.Sleep(CombatResultDelayMs);
-                    Log("OnAttackAckReceived lose delay ShowPostDamageScreen");
-                    ShowPostDamageScreen();
-                }).Start();
+                StartDeferredPostDamage();
             }
         }
 
@@ -669,30 +674,22 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 _display.ShowCombatResult(true, opponentName);
                 MarkDisplayActivity("combat-result-rx-win");
 
-                new Thread(() =>
-                {
-                    Log($"OnCombatResultReceived win delay sleep={CombatResultDelayMs}");
-                    Thread.Sleep(CombatResultDelayMs);
-                    Log("OnCombatResultReceived win delay EnterHud");
-                    EnterHud();
-                }).Start();
+                StartDeferredHud();
             }
             else
             {
                 Log("OnCombatResultReceived we lost");
+                bool loserHadKey = _state.HasFlag;
+                if (loserHadKey)
+                    _state.DropFlag();
                 _state.TakeDamage();
+                StartReportCombat(winnerId, DeviceId, loserHadKey);
                 _uiMode = UiMode.CombatResult;
                 Log($"OnCombatResultReceived ShowCombatResult lost uiMode={_uiMode} lives={_state.Lives} state={_state.State}");
                 _display.ShowCombatResult(false, opponentName);
                 MarkDisplayActivity("combat-result-rx-loss");
 
-                new Thread(() =>
-                {
-                    Log($"OnCombatResultReceived delay sleep={CombatResultDelayMs}");
-                    Thread.Sleep(CombatResultDelayMs);
-                    Log("OnCombatResultReceived delay ShowPostDamageScreen");
-                    ShowPostDamageScreen();
-                }).Start();
+                StartDeferredPostDamage();
             }
         }
 
@@ -804,6 +801,74 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void SendRespawnRequest(byte flagNodeId)
             => QueuePacket(_builder.RespawnReq(DeviceId, flagNodeId));
 
+        private void InteractWithFlagNode(byte flagNodeId)
+        {
+            Log($"InteractWithFlagNode flagNode=0x{flagNodeId:X2} hasFlag={_state.HasFlag}");
+            if (_state.HasFlag && _state.CarriedKey != null)
+            {
+                byte[] key = _state.CarriedKey;
+                QueuePacket(_builder.Deliver(DeviceId, flagNodeId, key));
+                StartReportDeliver(key);
+                MarkDisplayActivity("flag-deliver");
+            }
+            else
+            {
+                QueuePacket(_builder.Capture(DeviceId, flagNodeId));
+                MarkDisplayActivity("flag-capture");
+            }
+        }
+
+        private void StartReportCombat(byte winnerId, byte loserId, bool loserHadKey)
+        {
+            _pendingCombatWinnerId = winnerId;
+            _pendingCombatLoserId = loserId;
+            _pendingCombatLoserHadKey = loserHadKey;
+            new Thread(ReportCombatThread).Start();
+        }
+
+        private void ReportCombatThread()
+        {
+            Thread.Sleep(TxDrainIntervalMs + 100);
+            ReportCombatViaHttp(_pendingCombatWinnerId, _pendingCombatLoserId, _pendingCombatLoserHadKey);
+        }
+
+        private void StartReportDeliver(byte[] key)
+        {
+            _pendingDeliverKey = key;
+            new Thread(ReportDeliverThread).Start();
+        }
+
+        private void ReportDeliverThread()
+        {
+            Thread.Sleep(TxDrainIntervalMs + 100);
+            ReportDeliverViaHttp(_pendingDeliverKey);
+        }
+
+        private void StartDeferredHud()
+        {
+            new Thread(DeferredHudThread).Start();
+        }
+
+        private void DeferredHudThread()
+        {
+            Thread.Sleep(CombatResultDelayMs);
+            _combatTarget = null;
+            _combatTargetDeviceId = 0;
+            EnterHud();
+        }
+
+        private void StartDeferredPostDamage()
+        {
+            new Thread(DeferredPostDamageThread).Start();
+        }
+
+        private void DeferredPostDamageThread()
+        {
+            Thread.Sleep(CombatResultDelayMs);
+            ShowPostDamageScreen();
+        }
+
+
         // ---------------------------------------------------------------
         // Helpers
         // ---------------------------------------------------------------
@@ -887,13 +952,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             string[] targets = _state.GetCombatTargets(out int count);
             int selectedIndex = _state.SelectedIndex;
             _state.CopyCombatTargetRssi(_scratchCombatRssi, MaxRenderedTargets);
+            _state.CopyCombatTargetTypes(_scratchCombatTypes, MaxRenderedTargets);
             Log($"RenderHudAndList targets count={count} selected={selectedIndex}");
 
             Log("RenderHudAndList RenderHud+List begin");
-            _display.RenderHud(_state.ToHudData(), targets, count, selectedIndex, _scratchCombatRssi);
+            _display.RenderHud(_state.ToHudData(), targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
             MarkDisplayActivity("hud-full");
             Log("RenderHudAndList RenderHud+List end");
-            CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi);
+            CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
 
             _combatListDirty = false;
             lock (_crossThreadSignalLock)
@@ -1014,6 +1080,147 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             }
         }
 
+        private void ReportCombatViaHttp(byte winnerId, byte loserId, bool loserHadKey)
+        {
+            if (!TryBeginHttpWork("Combat", "busy"))
+                return;
+
+            bool pausedLoRa = false;
+            try
+            {
+                if (!PrepareHttpRadio("ReportCombat", out pausedLoRa))
+                    return;
+
+                _httpForRespawn.ReportCombat(winnerId, loserId, loserHadKey);
+                DebugLog.Write("[GamerDevice] ReportCombat winner=" + winnerId.ToString() + " loser=" + loserId.ToString() + " loserHadKey=" + (loserHadKey ? "1" : "0"));
+            }
+            catch (Exception ex)
+            {
+                string m = ex.Message != null ? ex.Message : string.Empty;
+                DebugLog.Write("[GamerDevice] ReportCombat exception " + m);
+            }
+            finally
+            {
+                FinishHttpRadio("ReportCombat", pausedLoRa);
+                EndHttpWork();
+            }
+        }
+
+        private void ReportDeliverViaHttp(byte[] key)
+        {
+            if (!TryBeginHttpWork("Deliver", "busy"))
+                return;
+
+            _display.ShowMessage("Delivering", "please wait");
+            MarkDisplayActivity("deliver-http");
+
+            bool pausedLoRa = false;
+            try
+            {
+                if (!PrepareHttpRadio("ReportDeliver", out pausedLoRa))
+                    return;
+
+                bool accepted = _httpForRespawn.ReportDeliver(_state.DeviceId, key);
+                DebugLog.Write("[GamerDevice] ReportDeliver accepted=" + (accepted ? "1" : "0"));
+
+                if (accepted)
+                {
+                    _state.DropFlag();
+                    EnterHud();
+                }
+                else
+                {
+                    _display.ShowMessage("Deliver", "rejected");
+                    MarkDisplayActivity("deliver-rejected");
+                }
+            }
+            catch (Exception ex)
+            {
+                string m = ex.Message != null ? ex.Message : string.Empty;
+                DebugLog.Write("[GamerDevice] ReportDeliver exception " + m);
+                _display.ShowMessage("Deliver", "error");
+                MarkDisplayActivity("deliver-error");
+            }
+            finally
+            {
+                FinishHttpRadio("ReportDeliver", pausedLoRa);
+                EndHttpWork();
+            }
+        }
+
+        private bool TryBeginHttpWork(string line1, string line2)
+        {
+            lock (_crossThreadSignalLock)
+            {
+                if (_respawnHttpInProgress)
+                {
+                    _display.ShowMessage(line1, line2);
+                    return false;
+                }
+
+                _respawnHttpInProgress = true;
+                return true;
+            }
+        }
+
+        private void EndHttpWork()
+        {
+            lock (_crossThreadSignalLock)
+            {
+                _respawnHttpInProgress = false;
+            }
+        }
+
+        private bool PrepareHttpRadio(string reason, out bool pausedLoRa)
+        {
+            pausedLoRa = false;
+            if (_httpForRespawn == null || _wifiForHttp == null)
+            {
+                DebugLog.Write("[GamerDevice] " + reason + ": HTTP or Wi-Fi bridge not configured");
+                return false;
+            }
+
+            if (_pauseLoRaForWifi != null)
+            {
+                DebugLog.Write("[GamerDevice] " + reason + " pause LoRa for Wi-Fi");
+                _pauseLoRaForWifi();
+                pausedLoRa = true;
+            }
+
+            WifiHttpBootOutcome wifi = _wifiForHttp.EnableForHttp();
+            if (wifi == WifiHttpBootOutcome.Failed)
+            {
+                _display.ShowMessage("WiFi", "failed");
+                return false;
+            }
+
+            if (wifi == WifiHttpBootOutcome.Skipped)
+            {
+                _display.ShowMessage("WiFi", "off");
+                return false;
+            }
+
+            return true;
+        }
+
+        private void FinishHttpRadio(string reason, bool pausedLoRa)
+        {
+            try
+            {
+                if (_wifiForHttp != null)
+                    _wifiForHttp.TearDownRadio();
+            }
+            catch
+            {
+            }
+
+            if (pausedLoRa && _resumeLoRaAfterWifi != null)
+            {
+                DebugLog.Write("[GamerDevice] " + reason + " resume LoRa");
+                _resumeLoRaAfterWifi();
+            }
+        }
+
         private void ShowPostDamageScreen()
         {
             Log($"ShowPostDamageScreen begin state={_state.State} lives={_state.Lives} uiMode={_uiMode}");
@@ -1063,7 +1270,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log("StartBackgroundServices end");
         }
 
-        private bool HasCombatListChanged(string[] targets, int count, int selectedIndex, int[] rssi)
+        private bool HasCombatListChanged(string[] targets, int count, int selectedIndex, int[] rssi, byte[] targetTypes)
         {
             if (count != _lastRenderedCount)
             {
@@ -1101,17 +1308,30 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 }
             }
 
+            if (targetTypes != null)
+            {
+                for (int i = 0; i < count && i < MaxRenderedTargets; i++)
+                {
+                    if (targetTypes[i] != _lastRenderedTypes[i])
+                    {
+                        if (VerboseTickLogging) Log($"HasCombatListChanged true type index={i} current={targetTypes[i]} previous={_lastRenderedTypes[i]}");
+                        return true;
+                    }
+                }
+            }
+
             if (VerboseTickLogging) Log("HasCombatListChanged false");
             return false;
         }
 
-        private void CacheCombatListSnapshot(string[] targets, int count, int selectedIndex, int[] rssi)
+        private void CacheCombatListSnapshot(string[] targets, int count, int selectedIndex, int[] rssi, byte[] targetTypes)
         {
             Log($"CacheCombatListSnapshot begin count={count} selected={selectedIndex}");
             for (int i = 0; i < MaxRenderedTargets; i++)
             {
                 _lastRenderedTargets[i] = i < count ? targets[i] : null;
                 _lastRenderedRssi[i] = (rssi != null && i < count) ? rssi[i] : UnknownCombatRssi;
+                _lastRenderedTypes[i] = (targetTypes != null && i < count) ? targetTypes[i] : IOD.CaptureTheFlag.NanoFramework.Types.DeviceType.Player;
             }
 
             _lastRenderedCount = count;
@@ -1126,6 +1346,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 _lastRenderedTargets[i] = null;
                 _lastRenderedRssi[i] = UnknownCombatRssi;
+                _lastRenderedTypes[i] = IOD.CaptureTheFlag.NanoFramework.Types.DeviceType.Player;
             }
 
             _lastRenderedCount = -1;
