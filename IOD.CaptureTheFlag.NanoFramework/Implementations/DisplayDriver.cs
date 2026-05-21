@@ -49,6 +49,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private readonly int _dividerX;
         private readonly int _combatListX;
         private const int CharWidth = 8;
+        private const int HudNameY = 7;
+        private const int HudNameDividerY = 23;
+        private const int HudContentTopY = 27;
         /// <summary>Width reserved for the 3-bar signal glyph.</summary>
         private const int SignalBarBlockW = 16;
         /// <summary>Space for RSSI text (dBm), e.g. <c>-128</c>, for tuning bar thresholds in the field.</summary>
@@ -57,17 +60,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int UnknownRssi = -200;
 
         private const int HeartX = 4;
-        private const int HeartY = 6;
+        private const int HeartY = 29;
         private const int HeartW = 10;
         private const int HeartH = 10;
 
         private const int SwordX = 4;
-        private const int SwordY = 42;
+        private const int SwordY = 59;
         private const int SwordW = 20;
         private const int SwordH = 20;
 
         private const int FlagX = 4;
-        private const int FlagY = 90;
+        private const int FlagY = 91;
         private const int FlagW = 14;
         private const int FlagH = 16;
 
@@ -78,8 +81,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int FlagTextX = FlagX + FlagW + 2;
         private const int FlagTextY = FlagY + 2;
 
-        private const int CombatListStartY = 6;
-        private const int CombatListSpacing = 16;
+        private const int CombatListStartY = HudContentTopY;
+        private const int CombatListSpacing = 14;
 
         private const int SkullW = 24;
         private const int SkullH = 20;
@@ -501,7 +504,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private void RefreshCombatListPartialUnsafe()
         {
             Log("RefreshCombatListPartialUnsafe begin");
-            EraseBlockUnsafe(_dividerX + 1, 0, _graphics.Width - _dividerX - 1, _graphics.Height);
+            EraseBlockUnsafe(_dividerX + 1, HudContentTopY, _graphics.Width - _dividerX - 1, _graphics.Height - HudContentTopY);
             DrawCombatListUnsafe(_lastTargets, _lastTargetCount, _lastSelectedIndex);
             PartialRefreshUnsafe();
             Log("RefreshCombatListPartialUnsafe end");
@@ -529,8 +532,13 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             BeginFullFrameUnsafe(ScreenMode.Hud, false, "RenderHud");
 
+            Log("RenderHudFrameUnsafe draw player name");
+            if (data.PlayerName != null)
+                _graphics.DrawText(data.PlayerName, _font, CentreX(data.PlayerName.Length), HudNameY, Color.Black);
+            _graphics.DrawLine(0, HudNameDividerY, _graphics.Width, HudNameDividerY, Color.Black);
+
             Log("RenderHudFrameUnsafe draw divider");
-            _graphics.DrawLine(_dividerX, 0, _dividerX, _graphics.Height, Color.Black);
+            _graphics.DrawLine(_dividerX, HudNameDividerY + 1, _dividerX, _graphics.Height, Color.Black);
 
             Log($"RenderHudFrameUnsafe draw heart state={_heartState}");
             DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, HeartX, HeartY);

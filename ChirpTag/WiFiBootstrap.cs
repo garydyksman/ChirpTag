@@ -186,7 +186,7 @@ namespace ChirpTag
 
                 foreach (WifiAvailableNetwork net in report.AvailableNetworks)
                 {
-                    if (net.Ssid != targetSsid)
+                    if (!string.Equals(net.Ssid, targetSsid))
                     {
                         continue;
                     }

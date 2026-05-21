@@ -456,6 +456,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public HudData ToHudData()
         {
             Log($"ToHudData lives={Lives} hasFlag={HasFlag} score={CombatScore} timer={Timer}");
+            _hudData.PlayerName = PlayerName;
             _hudData.Lives = Lives;
             _hudData.HasFlag = HasFlag;
             _hudData.CombatScore = CombatScore;

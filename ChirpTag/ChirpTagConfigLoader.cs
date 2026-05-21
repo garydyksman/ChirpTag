@@ -40,8 +40,8 @@ namespace ChirpTag
             int pnLen = pn == null ? 0 : pn.Length;
             string ssid = ChirpTagSettings.WifiSsid;
             int ssidLen = ssid == null ? 0 : ssid.Length;
-            DebugLog.Write(
-                "[Config] TryLoad merged playerNameLen=" + pnLen.ToString() + " urlLen=" + urlLen.ToString() + " wifiSsidLen=" + ssidLen.ToString() + " sslNoVerify=" + (ChirpTagSettings.GameApiSslNoVerify ? "1" : "0") + " ignoreAttackRangeLimit=" + (ChirpTagSettings.IgnoreAttackRangeLimit ? "1" : "0"));
+            //DebugLog.Write(
+            //    "[Config] TryLoad merged playerNameLen=" + pnLen.ToString() + " urlLen=" + urlLen.ToString() + " wifiSsidLen=" + ssidLen.ToString() + " sslNoVerify=" + (ChirpTagSettings.GameApiSslNoVerify ? "1" : "0") + " ignoreAttackRangeLimit=" + (ChirpTagSettings.IgnoreAttackRangeLimit ? "1" : "0"));
         }
 
         private static void TryLoadBuiltIn()
