@@ -509,7 +509,9 @@
             </summary>
             <param name="cancellationToken">The <see cref="T:System.Threading.CancellationToken"/> to be able to cancel the waiting time.</param>
             <returns>True if it returns before the <see cref="T:System.Threading.CancellationToken"/> expires, false otherwise.</returns>
-            <remarks>If cancellationToken is null, this method will block until the busy pin is low.</remarks>
+            <remarks>
+            Busy-pin polarity is controller-specific; implementations block until the device is ready for new commands.
+            </remarks>
         </member>
         <member name="M:Iot.Device.EPaper.Drivers.IEPaperDisplay.BeginFrameDraw">
             <summary>
@@ -972,6 +974,8 @@
             <remarks>
             The visible panel is 122x250 pixels, while the controller RAM is byte-aligned to 128x250 pixels.
             This driver exposes the native controller RAM geometry so drawing and frame buffer layout remain consistent.
+            The initialization and partial-refresh sequences are based on the LCMEN2R13EFC1 panel
+            datasheet together with Heltec's HT_lCMEN2R13EFC1.h and HT_lCMEN2R13EFC1_LUT.h reference files.
             </remarks>
         </member>
         <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PanelWidth">
@@ -997,6 +1001,11 @@
         <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.SpiMode">
             <summary>
             SPI mode used by the controller.
+            </summary>
+        </member>
+        <member name="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.BusyPinFallbackWaitMs">
+            <summary>
+            Minimum wait when no busy GPIO is wired; full refresh can exceed 1.5s on this panel.
             </summary>
         </member>
         <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.#ctor(System.Device.Spi.SpiDevice,System.Int32,System.Int32,System.Int32,System.Device.Gpio.GpioController,System.Boolean)">
@@ -1049,7 +1058,7 @@
         </member>
         <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.EndFrameDraw">
             <summary>
-            Ends the frame draw operation by flushing the frame buffer and refreshing the panel.
+            Ends the frame draw operation by flushing the frame buffer.
             </summary>
         </member>
         <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.DrawPixel(System.Int32,System.Int32,System.Drawing.Color)">
@@ -1071,7 +1080,9 @@
             </summary>
             <param name="x">The horizontal position.</param>
             <param name="y">The vertical position.</param>
-            <exception cref="T:System.NotImplementedException">Always thrown because positioned drawing is not implemented.</exception>
+            <remarks>
+            Positioned streaming writes are not used by this driver; callers should use <see cref="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.DrawPixel(System.Int32,System.Int32,System.Drawing.Color)"/> or <see cref="T:Iot.Device.EPaper.Graphics"/>.
+            </remarks>
         </member>
         <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.PerformPartialRefresh">
             <summary>
@@ -1127,10 +1138,13 @@
         <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.WaitReady(System.Threading.CancellationToken)">
             <summary>
             Waits until the display controller reports ready.
-            If no busy pin is available, a fixed delay is used instead.
             </summary>
             <param name="cancellationToken">A cancellation token for the wait operation.</param>
             <returns>True when the display is ready.</returns>
+            <remarks>
+            When a busy GPIO is used, this waits until BUSY is high (idle) for this UC8151-class controller.
+            If no busy pin is available, <see cref="F:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.BusyPinFallbackWaitMs"/> is used instead.
+            </remarks>
         </member>
         <member name="M:Iot.Device.EPaper.Drivers.LcmEn2r13.LcmEn2r13.Dispose">
             <summary>
@@ -2091,7 +2105,10 @@
             Initializes a new instance of the <see cref="T:Iot.Device.EPaper.Graphics"/> class.
             </summary>
             <param name="ePaperDisplay">The E-Paper display device to draw to.</param>
-            <param name="disposeDisplay">True to dispose the display when this instance is disposed.</param>
+            <param name="disposeDisplay">
+            When <see langword="true"/>, <see cref="M:Iot.Device.EPaper.Graphics.Dispose(System.Boolean)"/> also disposes <paramref name="ePaperDisplay"/>.
+            Pass <see langword="false"/> when the display lifetime is managed elsewhere (for example a <c>using</c> on the driver).
+            </param>
         </member>
         <member name="M:Iot.Device.EPaper.Graphics.DrawLine(System.Int32,System.Int32,System.Int32,System.Int32,System.Drawing.Color)">
             <summary>

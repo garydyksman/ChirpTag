@@ -44,6 +44,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (raw == null || raw.Length < 4)
             {
                 if (VerboseLogging) Log("Handle drop minimum length");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write("RX drop: too short len=" + (raw == null ? "null" : raw.Length.ToString()));
+                }
+
                 return;
             }
 
@@ -55,12 +60,24 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (expectedLength == -1 || raw.Length != expectedLength)
             {
                 if (VerboseLogging) Log("Handle drop expected length");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write(
+                        "RX drop: len mismatch from=0x" + fromDeviceId.ToString("X2") + " type=0x" + msgType.ToString("X2") + " len=" + raw.Length.ToString() + " expected=" + expectedLength.ToString());
+                }
+
                 return;
             }
 
             if (!raw.Validate())
             {
                 if (VerboseLogging) Log("Handle drop CRC");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write(
+                        "RX drop: CRC from=0x" + fromDeviceId.ToString("X2") + " type=0x" + msgType.ToString("X2") + " len=" + raw.Length.ToString());
+                }
+
                 return;
             }
 
@@ -68,6 +85,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (targetId != 0x00 && targetId != _deviceId)
             {
                 if (VerboseLogging) Log("Handle drop target mismatch");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write(
+                        "RX drop: target not us from=0x" + fromDeviceId.ToString("X2") + " type=0x" + msgType.ToString("X2") + " target=0x" + targetId.ToString("X2") + " me=0x" + _deviceId.ToString("X2"));
+                }
+
                 return;
             }
 
@@ -75,11 +98,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 DebugLog.Write("RX packet accepted");
             if (VerboseLogging) Log("Handle route");
 
+            if (CombatListDiagnostics.Enabled)
+            {
+                CombatListDiagnostics.Write(
+                    "RX ok from=0x" + fromDeviceId.ToString("X2") + " type=0x" + msgType.ToString("X2") + " rssi=" + rssi.ToString());
+            }
+
             switch (msgType)
             {
                 case PacketType.Heartbeat:
                     if (VerboseLogging) Log("Handle dispatch HeartbeatReceived");
-                    HeartbeatReceived?.Invoke(fromDeviceId, rssi, snr);
+                    HeartbeatReceived?.Invoke(fromDeviceId, raw[3], rssi, snr);
                     break;
 
                 case PacketType.GameStart:
@@ -140,6 +169,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
                 default:
                     if (VerboseLogging) Log("Handle unknown packet type");
+                    if (CombatListDiagnostics.Enabled)
+                    {
+                        CombatListDiagnostics.Write("RX unhandled type=0x" + msgType.ToString("X2") + " from=0x" + fromDeviceId.ToString("X2"));
+                    }
+
                     break;
             }
             if (VerboseLogging) Log("Handle end");

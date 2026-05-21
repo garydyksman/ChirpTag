@@ -11,8 +11,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         GameInfo GetCurrentGame();
 
         /// <summary>
-        /// Register by player name. Only call when Status == Waiting.
-        /// Returns assigned DeviceId.
+        /// POST <c>/api/game/register</c> with <c>playerName</c> (trimmed on server; match is case-sensitive).
+        /// Waiting: new name gets a new id; duplicate name → 409.
+        /// In progress: same name as an existing row with assigned id → 200 same id (reconnect); unknown name or bad row → 409.
         /// </summary>
         PlayerSetup Register(string playerName);
 

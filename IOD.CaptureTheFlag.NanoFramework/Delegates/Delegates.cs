@@ -1,6 +1,6 @@
 ﻿namespace IOD.CaptureTheFlag.NanoFramework.Delegates
 {
-    public delegate void HeartbeatReceivedDelegate(byte deviceId, int rssi, float snr);
+    public delegate void HeartbeatReceivedDelegate(byte deviceId, byte deviceType, int rssi, float snr);
     public delegate void GameStartDelegate();
     public delegate void GameEndDelegate(byte winnerId);
     public delegate void AttackDelegate(byte fromDeviceId);

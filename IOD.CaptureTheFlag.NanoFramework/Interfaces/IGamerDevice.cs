@@ -23,14 +23,17 @@
         // ---- Combat ----
         bool ResolveCombat(byte myCombatNumber, byte theirCombatNumber);
 
-        // ---- State transitions ----
-        void EnterStunned();
-        void EnterCapturing(byte flagNodeId);
-        void EnterDelivering(byte flagNodeId);
-        void EnterActive();
-
         // ---- UI events ----
+        /// <summary>Combat / PRG button: meaning depends on <see cref="IGameStateManager.State"/> (e.g. respawn when dead).</summary>
+        void OnCombatButtonPressed();
+
+        /// <summary>Boot / secondary button: cycle combat targets when alive in HUD.</summary>
+        void OnCycleTargetsButtonPressed();
+
+        /// <summary>Start combat when active in HUD (used by <see cref="OnCombatButtonPressed"/>).</summary>
         void Attack();
+
         void CycleTargets();
     }
 }
+
