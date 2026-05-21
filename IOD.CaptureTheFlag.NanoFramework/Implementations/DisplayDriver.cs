@@ -271,7 +271,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 int skullX = (_graphics.Width - SkullW) / 2;
                 int skullY = 12;
                 Log($"ShowDead draw skull x={skullX} y={skullY}");
-                DrawBitmapInvertedUnsafe(Icons.Skull, skullX, skullY);
+                DrawBitmapInvertedUnsafe(Icons.Skull, Icons.SkullWidth, skullX, skullY);
 
                 Log("ShowDead draw title");
                 _graphics.DrawText("YOU DIED", _font, CentreX(8), skullY + SkullH + 8, Color.White);
@@ -523,7 +523,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             Log($"RefreshHeartbeatPartialUnsafe begin heartState={_heartState}");
             EraseBlockUnsafe(HeartX, HeartY, HeartW, HeartH);
-            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, HeartX, HeartY);
+            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeartX, HeartY);
             PartialRefreshUnsafe();
             Log("RefreshHeartbeatPartialUnsafe end");
         }
@@ -541,15 +541,15 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _graphics.DrawLine(_dividerX, HudNameDividerY + 1, _dividerX, _graphics.Height, Color.Black);
 
             Log($"RenderHudFrameUnsafe draw heart state={_heartState}");
-            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, HeartX, HeartY);
+            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeartX, HeartY);
             _graphics.DrawText($":{data.Lives}", _font, HeartTextX, HeartTextY, Color.Black);
 
             Log("RenderHudFrameUnsafe draw score");
-            DrawBitmapUnsafe(Icons.Reticle, SwordX, SwordY);
+            DrawBitmapUnsafe(Icons.Reticle, Icons.ReticleWidth, SwordX, SwordY);
             _graphics.DrawText($":{data.CombatScore}", _font, SwordTextX, SwordTextY, Color.Black);
 
             Log("RenderHudFrameUnsafe draw flag");
-            DrawBitmapUnsafe(Icons.Flag, FlagX, FlagY);
+            DrawBitmapUnsafe(Icons.Flag, Icons.FlagWidth, FlagX, FlagY);
             _graphics.DrawText($":{(data.HasFlag ? "Y" : "N")}", _font, FlagTextX, FlagTextY, Color.Black);
 
             Log($"RenderHudFrameUnsafe draw targets count={count} selected={selectedIndex}");
@@ -567,7 +567,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
             int swordX = (_graphics.Width - SwordW) / 2;
             Log($"RenderCombatFrameUnsafe draw sword x={swordX}");
-            DrawBitmapUnsafe(Icons.Reticle, swordX, 10);
+            DrawBitmapUnsafe(Icons.Reticle, Icons.ReticleWidth, swordX, 10);
 
             Log("RenderCombatFrameUnsafe draw top divider");
             _graphics.DrawLine(0, 36, _graphics.Width, 36, Color.Black);
@@ -700,25 +700,27 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _graphics.EPaperDisplay.FrameBuffer.Clear(Color.Black);
         }
 
-        private void DrawBitmapUnsafe(byte[][] bitmap, int x, int y)
+        private void DrawBitmapUnsafe(ushort[] bitmap, int width, int x, int y)
         {
             for (int row = 0; row < bitmap.Length; row++)
             {
-                for (int col = 0; col < bitmap[row].Length; col++)
+                ushort bits = bitmap[row];
+                for (int col = 0; col < width; col++)
                 {
-                    if (bitmap[row][col] == 1)
+                    if ((bits & (1 << (width - col - 1))) != 0)
                         _graphics.DrawPixel(x + col, y + row, Color.Black);
                 }
             }
         }
 
-        private void DrawBitmapInvertedUnsafe(byte[][] bitmap, int x, int y)
+        private void DrawBitmapInvertedUnsafe(uint[] bitmap, int width, int x, int y)
         {
             for (int row = 0; row < bitmap.Length; row++)
             {
-                for (int col = 0; col < bitmap[row].Length; col++)
+                uint bits = bitmap[row];
+                for (int col = 0; col < width; col++)
                 {
-                    if (bitmap[row][col] == 1)
+                    if ((bits & (1u << (width - col - 1))) != 0)
                         _graphics.DrawPixel(x + col, y + row, Color.White);
                 }
             }

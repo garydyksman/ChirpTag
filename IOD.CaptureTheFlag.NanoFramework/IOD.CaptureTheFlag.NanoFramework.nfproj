@@ -50,7 +50,6 @@
     <Compile Include="Interfaces\IPacketBuilder.cs" />
     <Compile Include="Interfaces\IPacketParser.cs" />
     <Compile Include="Types\Icons.cs" />
-    <Compile Include="Types\PacketLength.cs" />
     <Compile Include="Types\PacketType.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Types\PeerInfo.cs" />

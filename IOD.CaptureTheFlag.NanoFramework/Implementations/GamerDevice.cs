@@ -1155,15 +1155,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             return result;
         }
 
-        // ---------------------------------------------------------------
-        // Stubs
-        // ---------------------------------------------------------------
-
-        public void EnterActive() { throw new NotImplementedException(); }
-        public void EnterCapturing(byte flagNodeId) { throw new NotImplementedException(); }
-        public void EnterDelivering(byte flagNodeId) { throw new NotImplementedException(); }
-        public void EnterStunned() { throw new NotImplementedException(); }
-
         // When GAMER_DEVICE_TRACE is not in DefineConstants, all Log(...) calls (and their arguments) compile out.
         [Conditional("GAMER_DEVICE_TRACE")]
         private void Log(string message)

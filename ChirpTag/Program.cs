@@ -1,3 +1,8 @@
+using System;
+using System.Device.Gpio;
+using System.Device.Spi;
+using System.Net.Security;
+using System.Threading;
 using IOD.CaptureTheFlag.NanoFramework.Enum;
 using IOD.CaptureTheFlag.NanoFramework.Implementations;
 using IOD.CaptureTheFlag.NanoFramework.Interfaces;
@@ -8,11 +13,6 @@ using Iot.Device.EPaper.Enums;
 using Iot.Device.EPaper.Fonts;
 using Iot.Device.LoRa.Drivers.Sx1262;
 using nanoFramework.Hardware.Esp32;
-using System;
-using System.Device.Gpio;
-using System.Net.Security;
-using System.Device.Spi;
-using System.Threading;
 
 namespace ChirpTag
 {
