@@ -9,14 +9,7 @@
       "device": "",
       "stopOnEntry": true,
       "deployAssemblies": true,
-      "verbosity": "none"
-    },
-    {
-      "name": "nanoFramework: Attach to Device",
-      "type": "nanoframework",
-      "request": "attach",
-      "device": "",
-      "program": "${workspaceFolder}/ChirpTag/bin/Debug"
+      "verbosity": "none"   
     }
   ]
 }

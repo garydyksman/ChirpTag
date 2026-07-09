@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <RunConfiguration>
+    <ResultsDirectory>.\TestResults</ResultsDirectory>
+    <TestSessionTimeout>120000</TestSessionTimeout>
+  </RunConfiguration>
+  <nanoFrameworkAdapter>
+    <Logging>None</Logging>
+    <IsRealHardware>False</IsRealHardware>
+    <RealHardwarePort></RealHardwarePort>
+    <CLRVersion></CLRVersion>
+    <PathToLocalCLRInstance></PathToLocalCLRInstance>
+  </nanoFrameworkAdapter>
+</RunSettings>
