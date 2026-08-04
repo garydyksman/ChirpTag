@@ -5,11 +5,11 @@
       "name": "nanoFramework: Launch and Debug",
       "type": "nanoframework",
       "request": "launch",
-      "program": "${workspaceFolder}/ChirpTag/bin/Debug",
+      "program": "${workspaceFolder}/ChirpTagFlagNode/bin/Debug",
       "device": "",
       "stopOnEntry": true,
       "deployAssemblies": true,
-      "verbosity": "none"   
+      "verbosity": "debug"
     }
   ]
 }

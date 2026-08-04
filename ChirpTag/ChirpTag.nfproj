@@ -15,6 +15,7 @@
     <RootNamespace>ChirpTag</RootNamespace>
     <AssemblyName>ChirpTag</AssemblyName>
     <TargetFrameworkVersion>v1.0</TargetFrameworkVersion>
+    <NoStdLib>true</NoStdLib>
   </PropertyGroup>
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.props" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.props')" />
   <ItemGroup>
@@ -63,6 +64,7 @@
     </Reference>
     <Reference Include="System.Net">
       <HintPath>..\packages\nanoFramework.System.Net.1.11.54\lib\System.Net.dll</HintPath>
+      <Private>True</Private>
     </Reference>
     <Reference Include="System.IO.FileSystem">
       <HintPath>..\packages\nanoFramework.System.IO.FileSystem.1.1.87\lib\System.IO.FileSystem.dll</HintPath>

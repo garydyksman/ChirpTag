@@ -15,6 +15,7 @@
     <RootNamespace>IOD.CaptureTheFlag.NanoFramework</RootNamespace>
     <AssemblyName>IOD.CaptureTheFlag.NanoFramework</AssemblyName>
     <TargetFrameworkVersion>v1.0</TargetFrameworkVersion>
+    <NoStdLib>true</NoStdLib>
   </PropertyGroup>
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.props" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.props')" />
   <ItemGroup>

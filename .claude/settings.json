@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "env": {
+    "ANTHROPIC_BASE_URL": "https://api-v2.bonzai.iodigital.com/",
+    "ANTHROPIC_AUTH_TOKEN": "sk-n9wMEXPWKL0LN9J156WO_Q",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    "CLAUDE_CODE_SKIP_FAST_MODE_NETWORK_ERRORS": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  }
+}

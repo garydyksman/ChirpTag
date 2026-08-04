@@ -1,0 +1,12 @@
+<Project>
+  <!-- Strip Mono framework assemblies from transitive dependency paths.
+       GenerateBinaryOutputTask crashes looking for .pe files next to Mono GAC DLLs. -->
+  <Target Name="RemoveMonoGacDependencies" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceDependencyPaths Remove="@(ReferenceDependencyPaths)"
+        Condition="$([System.String]::Copy('%(Identity)').Contains('/Library/Frameworks/Mono.framework/'))" />
+      <ReferencePath Remove="@(ReferencePath)"
+        Condition="$([System.String]::Copy('%(Identity)').Contains('/Library/Frameworks/Mono.framework/Versions/6.12.0/lib/mono/gac/'))" />
+    </ItemGroup>
+  </Target>
+</Project>
