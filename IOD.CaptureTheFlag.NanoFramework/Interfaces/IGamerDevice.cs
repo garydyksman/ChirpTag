@@ -1,7 +1,10 @@
-﻿namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
+﻿using IOD.CaptureTheFlag.NanoFramework.Enum;
+
+namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
 {
     public interface IGamerDevice : IGameDevice
     {
+        PlayerState State { get; }
         byte CombatScore { get; }
         bool HasKey { get; }
         byte[] CarriedKey { get; }   // null if not carrying

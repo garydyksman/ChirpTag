@@ -113,14 +113,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // State helpers
         // ---------------------------------------------------------------
 
-        private bool IsActive => _state.State == GameState.Active;
-        private bool IsDead => _state.State == GameState.Dead;
+        private bool IsActive => _state.State == PlayerState.Active;
+        private bool IsDead => _state.State == PlayerState.Dead;
 
         // Show/update HUD while alive in-game, even if temporarily stunned.
         private bool CanRenderHud =>
             _uiMode == UiMode.Hud &&
-            _state.State != GameState.Dead &&
-            _state.State != GameState.Idle;
+            _state.State != PlayerState.Dead &&
+            _state.State != PlayerState.Idle;
 
         private bool IsCombatRadioWindow =>
             _combatPending ||
@@ -132,8 +132,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // Presence heartbeat should be transmitted while the player is still "in play".
         // Dead and idle devices should not keep advertising themselves.
         private bool CanAdvertisePresence =>
-            _state.State == GameState.Active ||
-            _state.State == GameState.Stunned;
+            _state.State == PlayerState.Active ||
+            _state.State == PlayerState.Stunned;
 
         // ---------------------------------------------------------------
         // IGamerDevice properties
@@ -188,7 +188,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
             // If the caller already marked the game active before constructing us,
             // seed HUD mode so the UI loop behaves correctly immediately.
-            if (_state.State == GameState.Active)
+            if (_state.State == PlayerState.Active)
             {
                 _uiMode = UiMode.Hud;
                 _combatListDirty = true;
@@ -646,7 +646,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void OnCombatResultReceived(byte fromDeviceId, byte winnerId)
         {
             Log($"OnCombatResultReceived from=0x{fromDeviceId:X2} winner=0x{winnerId:X2} state={_state.State} uiMode={_uiMode} pending={_combatPending} resolved={_combatResolved}");
-            if (IsDead || _state.State == GameState.Idle)
+            if (IsDead || _state.State == PlayerState.Idle)
             {
                 Log("OnCombatResultReceived ignored because dead or idle");
                 return;
@@ -696,7 +696,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void OnFlagTransferReceived(byte fromDeviceId, byte[] key)
         {
             Log($"OnFlagTransferReceived from=0x{fromDeviceId:X2} keyLen={(key == null ? 0 : key.Length)} state={_state.State} uiMode={_uiMode}");
-            if (IsDead || _state.State == GameState.Idle)
+            if (IsDead || _state.State == PlayerState.Idle)
             {
                 Log("OnFlagTransferReceived ignored because dead or idle");
                 return;
@@ -716,7 +716,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void OnKeyGrantReceived(byte fromFlagNodeId, byte[] key)
         {
             Log($"OnKeyGrantReceived fromFlagNode=0x{fromFlagNodeId:X2} keyLen={(key == null ? 0 : key.Length)} state={_state.State} uiMode={_uiMode}");
-            if (IsDead || _state.State == GameState.Idle)
+            if (IsDead || _state.State == PlayerState.Idle)
             {
                 Log("OnKeyGrantReceived ignored because dead or idle");
                 return;
@@ -754,7 +754,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public override void OnGameStart()
         {
             Log($"OnGameStart begin state={_state.State} uiMode={_uiMode}");
-            _state.SetState(GameState.Active);
+            _state.SetState(PlayerState.Active);
             ResetCombatFlow();
             EnterHud();
             StartBackgroundServices();
@@ -769,7 +769,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 _awaitingRespawnAck = false;
             }
 
-            _state.SetState(GameState.Idle);
+            _state.SetState(PlayerState.Idle);
             ResetCombatFlow();
 
             _uiMode = UiMode.Message;

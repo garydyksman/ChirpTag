@@ -10,7 +10,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public byte DeviceType => Types.DeviceType.Player;
 
-        public GameState State {get; private set; }
+        public PlayerState State {get; private set; }
 
         public IMessageHandler Handler {get; private set; }
 
@@ -26,7 +26,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public GameDevice(byte deviceId, IMessageHandler messageHandler)
         {
-            State = GameState.Idle;
+            State = PlayerState.Idle;
             Handler = messageHandler;
 
             DeviceId = deviceId; // default, should be set by caller

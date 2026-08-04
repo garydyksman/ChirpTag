@@ -21,6 +21,7 @@
   <ItemGroup>
     <Compile Include="Delegates\Delegates.cs" />
     <Compile Include="Enum\GameStatus.cs" />
+    <Compile Include="Enum\PlayerState.cs" />
     <Compile Include="Enum\UiMode.cs" />
     <Compile Include="Extensions\ByteArrayExtensions.cs" />
     <Compile Include="Implementations\DisplayDriver.cs" />
@@ -42,7 +43,6 @@
     <Compile Include="Types\GameInfo.cs" />
     <Compile Include="Types\HudData.cs" />
     <Compile Include="Types\DeviceType.cs" />
-    <Compile Include="Enum\GameState.cs" />
     <Compile Include="Interfaces\IFlagNode.cs" />
     <Compile Include="Interfaces\IGameDevice.cs" />
     <Compile Include="Interfaces\IGamerDevice.cs" />

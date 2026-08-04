@@ -1,6 +1,6 @@
 ﻿namespace IOD.CaptureTheFlag.NanoFramework.Enum
 {
-    public enum GameState
+    public enum PlayerState
     {
         Idle,
         Active,

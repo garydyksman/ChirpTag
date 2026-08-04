@@ -65,7 +65,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public byte DeviceId { get; }
         public string PlayerName { get; }
-        public GameState State { get; private set; }
+        public PlayerState State { get; private set; }
         public byte Lives { get; private set; }
         public bool HasFlag { get; private set; }
         public byte[] CarriedKey { get; private set; }
@@ -80,7 +80,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             PlayerName = playerName;
             _ignoreAttackRangeLimit = ignoreAttackRangeLimit;
             Lives = 1;
-            State = GameState.Idle;
+            State = PlayerState.Idle;
             Timer = "00:00";
             for (int i = 0; i < MaxDeviceId; i++)
             {
@@ -127,7 +127,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // State mutations
         // ---------------------------------------------------------------
 
-        public void SetState(GameState state)
+        public void SetState(PlayerState state)
         {
             Log($"SetState {State} -> {state}");
             State = state;
@@ -143,7 +143,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             Log($"TakeDamage begin lives={Lives} state={State}");
             if (Lives > 0) Lives--;
-            State = Lives == 0 ? GameState.Dead : GameState.Stunned;
+            State = Lives == 0 ? PlayerState.Dead : PlayerState.Stunned;
             Log($"TakeDamage end lives={Lives} state={State}");
         }
 
@@ -151,7 +151,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             Log($"Respawn begin oldScore={CombatScore} newScore={newCombatScore} state={State}");
             CombatScore = newCombatScore;
-            State = GameState.Active;
+            State = PlayerState.Active;
             Log($"Respawn end score={CombatScore} state={State}");
         }
 
@@ -224,7 +224,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (_presenceCycle == int.MaxValue)
                 _presenceCycle = 1;
 
-            if (State == GameState.Dead)
+            if (State == PlayerState.Dead)
             {
                 lock (_peerLock)
                 {

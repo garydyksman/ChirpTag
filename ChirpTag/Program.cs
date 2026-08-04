@@ -360,7 +360,7 @@ namespace ChirpTag
             }
 
             Log("[Program] Phase 3 SetState Active");
-            state.SetState(GameState.Active);
+            state.SetState(PlayerState.Active);
 
             var builder = new PacketBuilder();
             var handler = new MessageHandler(new PacketParser(), state.DeviceId);

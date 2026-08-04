@@ -15,7 +15,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         string PlayerName { get; }
 
         // ---- Game state ----
-        GameState State { get; }
+        PlayerState State { get; }
         byte Lives { get; }
         bool HasFlag { get; }
         byte[] CarriedKey { get; }
@@ -28,7 +28,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         void ApplyPlayerList(PlayerInfo[] players);
 
         // ---- State mutations ----
-        void SetState(GameState state);
+        void SetState(PlayerState state);
         void TakeDamage();
         void Respawn(byte newCombatScore);
         void PickupFlag(byte[] key);
