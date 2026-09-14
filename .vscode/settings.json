@@ -1,0 +1,4 @@
+{
+  "nanoFramework.serialPort": "/dev/tty.usbmodem1234561",
+  "nanoFramework.autoSelectDevice": false
+}

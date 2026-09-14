@@ -13,6 +13,7 @@ using Iot.Device.EPaper.Enums;
 using Iot.Device.EPaper.Fonts;
 using Iot.Device.LoRa.Drivers.Sx1262;
 using nanoFramework.Hardware.Esp32;
+using static IOD.CaptureTheFlag.NanoFramework.Implementations.WiFiHelper;
 
 namespace ChirpTag
 {
@@ -115,7 +116,6 @@ namespace ChirpTag
         public static void Main()
         {
             Log("[Program] Main start");
-            ChirpTagConfigLoader.TryLoad();
             Log("[Program] Create GPIO controller");
             var gpio = new GpioController();
 
@@ -176,7 +176,7 @@ namespace ChirpTag
             if (gameApiBaseUrl.Length == 0)
             {
                 driver.ShowMessage("Missing config", "gameApiBaseUrl");
-                Log("[Program] halt: set gameApiBaseUrl in AppSettingsBuiltIn / appsettings.json or " + ChirpTagConfigLoader.DefaultConfigPath);
+                Log("[Program] halt: set API_URL in LocalConfig.cs");
                 while (true)
                 {
                     Thread.Sleep(60_000);
@@ -247,6 +247,10 @@ namespace ChirpTag
             // -------------------------------------------------------
             // Phase 2 � register (or rejoin from roster) + wait for Active
             // -------------------------------------------------------
+            // Get MAC address for registration
+            string macAddress = WiFiHelper.GetMacAddress();
+            Log("[Program] Phase 2 MAC: " + macAddress);
+
             GameInfo phase2Snapshot = http.GetCurrentGame();
             PlayerSetup setup;
             if (phase2Snapshot.Status == GameStatus.Active
@@ -258,15 +262,18 @@ namespace ChirpTag
             }
             else
             {
-                Log("[Program] Phase 2 Register");
-                setup = http.Register(apiPlayerName);
+                Log("[Program] Phase 2 Register with MAC");
+                driver.ShowMessage("Registering", apiPlayerName);
+                setup = http.RegisterPlayer(macAddress, apiPlayerName);
                 Log("[Program] Phase 2 registered deviceId=" + setup.DeviceId.ToString());
                 if (setup.DeviceId == 0)
                 {
-                    driver.ShowMessage("Register failed", "name or game?");
+                    driver.ShowMessage("Register failed", "check server");
                 }
                 else
                 {
+                    driver.ShowMessage("Registered!", "ID: " + setup.DeviceId.ToString());
+                    Thread.Sleep(1500);
                     driver.ShowMessage("Waiting for", "players...");
                 }
             }

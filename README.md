@@ -146,10 +146,11 @@ nanoff --nanodevice --serialport /dev/cu.usbmodem1234561 --deploy \
 
 ### Configuration
 
-Device settings use a two-layer merge:
+⚠️ **IMPORTANT:** `AppSettingsBuiltIn.cs` is **intentionally empty** to prevent debugging nightmares when dev tunnels refresh!
 
-1. **`AppSettingsBuiltIn.cs`** — compiled defaults
-2. **`I:\appsettings.json`** — runtime overrides (on device SPIFFS)
+**All configuration must be in `I:\appsettings.json` on the device SPIFFS.**
+
+See **[CONFIG-DEPLOYMENT.md](CONFIG-DEPLOYMENT.md)** for detailed instructions on deploying config to your device.
 
 Example `appsettings.json`:
 

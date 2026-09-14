@@ -10,6 +10,8 @@ namespace ChirpTagFlagNode
 {
     public class FlagNodeDevice : IFlagNode
     {
+        private const int HeartbeatIntervalMs = 5_000;
+
         private readonly byte _flagNodeId;
         private readonly Sx1262 _lora;
         private readonly Ssd1306 _display;
@@ -18,12 +20,14 @@ namespace ChirpTagFlagNode
         private readonly TxQueue _txQueue;
         private readonly IGameHttpClient _httpClient;
         private readonly IWifiHttpBridge _wifiHttpBridge;
+        private readonly byte[] _heartbeatBytes;
 
         private byte[] _key;
         private bool _keyTaken;
         private bool _isRunning;
 
         private Thread _txThread;
+        private Thread _heartbeatThread;
 
         // IGameDevice implementation
         public byte DeviceId => _flagNodeId;
@@ -51,6 +55,7 @@ namespace ChirpTagFlagNode
             _builder = new PacketBuilder();
             _messageHandler = new MessageHandler(new PacketParser(), flagNodeId);
             _txQueue = new TxQueue(capacity: 8);
+            _heartbeatBytes = _builder.Heartbeat(_flagNodeId, DeviceType).ToBytes();
 
             _key = new byte[4];
             _keyTaken = false;
@@ -76,6 +81,10 @@ namespace ChirpTagFlagNode
             // Start TX loop thread
             _txThread = new Thread(TxLoop);
             _txThread.Start();
+
+            // Start heartbeat loop thread so players classify this node as a flag node.
+            _heartbeatThread = new Thread(HeartbeatLoop);
+            _heartbeatThread.Start();
 
             Console.WriteLine("[FlagNode] Game started");
             UpdateDisplay("GAME ACTIVE", "Ready");
@@ -334,6 +343,30 @@ namespace ChirpTagFlagNode
             }
 
             Console.WriteLine("[FlagNode] TxLoop stopped");
+        }
+
+        private void HeartbeatLoop()
+        {
+            Console.WriteLine("[FlagNode] HeartbeatLoop started");
+
+            while (_isRunning)
+            {
+                try
+                {
+                    if (!_txQueue.Enqueue(_heartbeatBytes))
+                    {
+                        Console.WriteLine("[FlagNode] Heartbeat dropped (TX queue full)");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FlagNode] HeartbeatLoop error: {ex.Message}");
+                }
+
+                Thread.Sleep(HeartbeatIntervalMs);
+            }
+
+            Console.WriteLine("[FlagNode] HeartbeatLoop stopped");
         }
 
         // ---- Display ----

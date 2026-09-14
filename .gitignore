@@ -3,8 +3,12 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/master/VisualStudio.gitignore
 
-# Local device / secrets (copy appsettings.sample.json to ChirpTag/appsettings.json)
-ChirpTag/appsettings.json
+# Local device / secrets
+ChirpTag/LocalConfig.cs
+ChirpTagFlagNode/LocalConfig.cs
+
+# Local ax indexing and runtime state
+.ax/
 
 # User-specific files
 *.rsuser
@@ -278,6 +282,13 @@ ServiceFabricBackup/
 *- [Bb]ackup ([0-9]).rdl
 *- [Bb]ackup ([0-9][0-9]).rdl
 
+# ax local runtime state
+.ax/ax.db
+.ax/ax.db-*
+.ax/daemon.json
+.ax/daemon.pid
+.ax/daemon.sock
+
 # Microsoft Fakes
 FakesAssemblies/
 
@@ -367,4 +378,7 @@ FodyWeavers.xsd
 
 # IDE / tooling
 .cursor/
-.dotnet/
+.dotnet/.DS_Store
+
+# macOS
+.DS_Store

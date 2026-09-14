@@ -32,6 +32,7 @@
     <Compile Include="Implementations\GameStateManager.cs" />
     <Compile Include="Implementations\MessageHandler.cs" />
     <Compile Include="Implementations\GameApiHttpClient.cs" />
+    <Compile Include="Implementations\WiFiHelper.cs" />
     <Compile Include="Implementations\Packet.cs" />
     <Compile Include="Implementations\PacketBuilder.cs" />
     <Compile Include="Implementations\PacketParser.cs" />

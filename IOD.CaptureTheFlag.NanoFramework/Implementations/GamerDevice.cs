@@ -108,6 +108,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private readonly object _displayActivityLock = new object();
         private long _lastDisplayActivityTick;
         private long _lastHeartbeatIndicatorTick;
+        private long _lastHeartbeatToggleTick;
+        private bool _needHeartbeatHeaderRefresh;
 
         // ---------------------------------------------------------------
         // State helpers
@@ -362,6 +364,22 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 if (VerboseTickLogging)
                     Log($"UiLoop sleep={UiRefreshIntervalMs}");
 
+                // Heartbeat header flash logic
+                if (CanRenderHud)
+                {
+                    long nowTick = DateTime.UtcNow.Ticks;
+                    if (nowTick - _lastHeartbeatToggleTick > 750 * TicksPerMillisecond) // 750ms
+                    {
+                        _needHeartbeatHeaderRefresh = true;
+                        _lastHeartbeatToggleTick = nowTick;
+                    }
+                    if (_needHeartbeatHeaderRefresh)
+                    {
+                        _display.UpdateHeartbeat();
+                        _needHeartbeatHeaderRefresh = false;
+                    }
+                }
+
                 Thread.Sleep(UiRefreshIntervalMs);
             }
             Log("UiLoop stop");
@@ -578,6 +596,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log($"OnAttackReceived enter combat uiMode={_uiMode} target=0x{fromDeviceId:X2} name={_combatTarget}");
 
             _display.ShowCombat(_combatTarget, _state.CombatScore);
+            (_display as DisplayDriver)?.Flush(); // Immediate e-paper update for combat mode
             MarkDisplayActivity("combat-defend");
 
             Log($"OnAttackReceived queue AttackAck score={_state.CombatScore}");

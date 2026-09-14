@@ -22,10 +22,13 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // ---------------------------------------------------------------
         // Player list — from HTTP server, permanent for game duration
         // _playerNames[deviceId] = name, null if not registered
+        // _peerTeams[deviceId] = team name, null if not assigned
         // ---------------------------------------------------------------
 
         private readonly string[] _playerNames = new string[MaxDeviceId];
+        private readonly string[] _peerTeams = new string[MaxDeviceId];
         private readonly byte[] _peerDeviceTypes = new byte[MaxDeviceId];
+        private string _myTeam;
 
         // ---------------------------------------------------------------
         // Presence — _lastSeen[deviceId] = refresh cycle of last heartbeat RX
@@ -105,14 +108,16 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 {
                     CombatScore = player.CombatScore;
                     EnemyFlagId = player.EnemyFlagId;
-                    Log($"ApplyPlayerList self score={CombatScore} enemyFlag=0x{EnemyFlagId:X2}");
+                    _myTeam = string.IsNullOrEmpty(player.Team) ? null : player.Team;
+                    Log($"ApplyPlayerList self score={CombatScore} enemyFlag=0x{EnemyFlagId:X2} myTeam={(_myTeam ?? "(null)")}");
                 }
                 else
                 {
                     // Empty names from JSON deserialize as ""; treat like unknown so HUD uses 0xNN fallback.
                     _playerNames[player.DeviceId] = string.IsNullOrEmpty(player.Name) ? null : player.Name;
+                    _peerTeams[player.DeviceId] = string.IsNullOrEmpty(player.Team) ? null : player.Team;
                     httpPeerRows++;
-                    Log($"ApplyPlayerList stored peer id=0x{player.DeviceId:X2} name={(_playerNames[player.DeviceId] ?? "(null)")}");
+                    Log($"ApplyPlayerList stored peer id=0x{player.DeviceId:X2} name={(_playerNames[player.DeviceId] ?? "(null)")} team={(_peerTeams[player.DeviceId] ?? "(null)")}");
                 }
             }
             Log("ApplyPlayerList end");
@@ -274,11 +279,21 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         continue;
                     }
 
+                    // Skip teammates (but keep flag nodes and players without teams)
+                    if (_peerDeviceTypes[id] == DeviceType.Player
+                        && !string.IsNullOrEmpty(_myTeam)
+                        && !string.IsNullOrEmpty(_peerTeams[id])
+                        && _peerTeams[id] == _myTeam)
+                    {
+                        Log($"RefreshCombatList skip teammate id=0x{id:X2} team={_peerTeams[id]}");
+                        continue;
+                    }
+
                     // Store both name and deviceId at same index
                     _combatTargets[i] = DisplayNameForPeer((byte)id);
                     _combatTargetIds[i] = (byte)id;
                     _combatTargetTypes[i] = _peerDeviceTypes[id];
-                    Log($"RefreshCombatList target index={i} id=0x{id:X2} name={_combatTargets[i]}");
+                    Log($"RefreshCombatList target index={i} id=0x{id:X2} name={_combatTargets[i]} team={(_peerTeams[id] ?? "(null)")}");
                     i++;
                 }
 
@@ -490,8 +505,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public HudData ToHudData()
         {
-            Log($"ToHudData lives={Lives} hasFlag={HasFlag} score={CombatScore} timer={Timer}");
+            Log($"ToHudData lives={Lives} hasFlag={HasFlag} score={CombatScore} timer={Timer} team={(_myTeam ?? "(null)")}");
             _hudData.PlayerName = PlayerName;
+            _hudData.TeamName = _myTeam;
             _hudData.Lives = Lives;
             _hudData.HasFlag = HasFlag;
             _hudData.CombatScore = CombatScore;

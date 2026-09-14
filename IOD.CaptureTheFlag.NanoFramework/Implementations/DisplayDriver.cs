@@ -59,6 +59,16 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int SignalColumnW = SignalBarBlockW + SignalRssiTextW;
         private const int UnknownRssi = -200;
 
+        // Header layout: ❤ PlayerName TEAM    🚩
+        private const int TopMargin = 3;
+        private const int HeaderHeartX = 4;
+        private const int HeaderHeartY = 7 + TopMargin;
+        private const int HeaderHeartW = 10;
+        private const int HeaderHeartH = 10;
+        private const int HeaderPlayerNameX = HeaderHeartX + HeaderHeartW + 4;
+        private const int HeaderFlagW = 14;
+        private const int HeaderFlagH = 16;
+
         private const int HeartX = 4;
         private const int HeartY = 29;
         private const int HeartW = 10;
@@ -99,8 +109,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private readonly string[] _lastTargets = new string[MaxRenderedTargets];
         private readonly int[] _lastTargetRssi = new int[MaxRenderedTargets];
         private readonly byte[] _lastTargetTypes = new byte[MaxRenderedTargets];
+        private readonly string[] _lastTargetTeams = new string[MaxRenderedTargets];
         private int _lastTargetCount = 0;
         private int _lastSelectedIndex = 0;
+        private bool _lastShowRssi = false;
 
         public DisplayDriver(LcmEn2r13 display, Graphics graphics, Font8x12 font)
         {
@@ -108,13 +120,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _graphics = graphics;
             _font = font;
             int w = _graphics.Width;
-            _dividerX = (w * 30) / 100;
-            if (_dividerX < 56)
-                _dividerX = 56;
-            if (_dividerX > w - 56)
-                _dividerX = w - 56;
 
-            _combatListX = _dividerX + 4;
+            // No left column - combat list uses full width
+            _dividerX = 0; // Not used anymore
+            _combatListX = 4; // Start near left edge
             for (int i = 0; i < MaxRenderedTargets; i++)
                 _lastTargetRssi[i] = UnknownRssi;
             for (int i = 0; i < MaxRenderedTargets; i++)
@@ -201,6 +210,20 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi, targetTypes);
                 RenderHudFrameUnsafe(data, _lastTargets, _lastTargetCount, _lastSelectedIndex);
                 Log($"RenderHud+List end mode={_screenMode}");
+            }
+        }
+
+        public void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes, string[] targetTeams, bool showRssi)
+        {
+            lock (_lock)
+            {
+                Log($"RenderHud+Teams begin mode={_screenMode} count={count} selected={selectedIndex} showRssi={showRssi}");
+
+                _lastHudData = data;
+                _lastShowRssi = showRssi;
+                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi, targetTypes, targetTeams);
+                RenderHudFrameUnsafe(data, _lastTargets, _lastTargetCount, _lastSelectedIndex);
+                Log($"RenderHud+Teams end mode={_screenMode}");
             }
         }
 
@@ -303,16 +326,27 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     if (VerbosePartialLogging) Log("UpdateHeartbeat ignored because mode is not Hud");
                     return;
                 }
-
                 _heartState = !_heartState;
                 if (VerbosePartialLogging) Log($"UpdateHeartbeat toggled heartState={_heartState}");
-                if (UsePartialHeartbeatRefresh)
-                {
-                    RefreshHeartbeatPartialUnsafe();
-                }
+                RefreshHeaderHeartbeatPartialUnsafe();
                 if (VerbosePartialLogging) Log("UpdateHeartbeat end");
             }
         }
+
+        private void RefreshHeaderHeartbeatPartialUnsafe()
+        {
+            // Erase and redraw just the header heart and combat score, then partial refresh
+            EraseBlockUnsafe(HeaderHeartX, HeaderHeartY - TopMargin, HeaderHeartW + 30, HeaderHeartH + TopMargin);
+            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeaderHeartX, HeaderHeartY);
+            // Redraw combat score next to the heart
+            if (_lastHudData != null)
+            {
+                string scoreText = $"({_lastHudData.CombatScore})";
+                _graphics.DrawText(scoreText, _font, HeaderHeartX + HeaderHeartW + 2, HudNameY + TopMargin, Color.Black);
+            }
+            PartialRefreshUnsafe();
+        }
+
 
         public void UpdateLives(byte value)
         {
@@ -535,8 +569,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private void RefreshHeartbeatPartialUnsafe()
         {
             Log($"RefreshHeartbeatPartialUnsafe begin heartState={_heartState}");
-            EraseBlockUnsafe(HeartX, HeartY, HeartW, HeartH);
-            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeartX, HeartY);
+            // EraseBlockUnsafe(HeartX, HeartY, HeartW, HeartH);
+            // DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeartX, HeartY);
             PartialRefreshUnsafe();
             Log("RefreshHeartbeatPartialUnsafe end");
         }
@@ -545,25 +579,33 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             BeginFullFrameUnsafe(ScreenMode.Hud, false, "RenderHud");
 
-            Log("RenderHudFrameUnsafe draw player name");
+            Log("RenderHudFrameUnsafe draw header");
+            // Draw heart (left aligned)
+            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeaderHeartX, HeaderHeartY);
+
+            // Draw combat score after heart
+            string scoreText = $"({data.CombatScore})";
+            _graphics.DrawText(scoreText, _font, HeaderHeartX + HeaderHeartW + 2, HudNameY, Color.Black);
+
+            // Draw player name and team (center aligned)
             if (data.PlayerName != null)
-                _graphics.DrawText(data.PlayerName, _font, CentreX(data.PlayerName.Length), HudNameY, Color.Black);
-            _graphics.DrawLine(0, HudNameDividerY, _graphics.Width, HudNameDividerY, Color.Black);
+            {
+                string headerText = data.PlayerName;
+                if (!string.IsNullOrEmpty(data.TeamName))
+                {
+                    headerText = headerText + " " + data.TeamName;
+                }
+                _graphics.DrawText(headerText, _font, CentreX(headerText.Length), HudNameY + TopMargin, Color.Black);
+            }
 
-            Log("RenderHudFrameUnsafe draw divider");
-            _graphics.DrawLine(_dividerX, HudNameDividerY + 1, _dividerX, _graphics.Height, Color.Black);
+            // Draw flag icon (right aligned) ONLY if player has the flag
+            if (data.HasFlag)
+            {
+                int flagX = _graphics.Width - HeaderFlagW - 4;
+                DrawBitmapUnsafe(Icons.Flag, Icons.FlagWidth, flagX, HeaderHeartY);
+            }
 
-            Log($"RenderHudFrameUnsafe draw heart state={_heartState}");
-            DrawBitmapUnsafe(_heartState ? Icons.HeartBeat : Icons.HeartNormal, Icons.HeartWidth, HeartX, HeartY);
-            _graphics.DrawText($":{data.Lives}", _font, HeartTextX, HeartTextY, Color.Black);
-
-            Log("RenderHudFrameUnsafe draw score");
-            DrawBitmapUnsafe(Icons.Reticle, Icons.ReticleWidth, SwordX, SwordY);
-            _graphics.DrawText($":{data.CombatScore}", _font, SwordTextX, SwordTextY, Color.Black);
-
-            Log("RenderHudFrameUnsafe draw flag");
-            DrawBitmapUnsafe(Icons.Flag, Icons.FlagWidth, FlagX, FlagY);
-            _graphics.DrawText($":{(data.HasFlag ? "Y" : "N")}", _font, FlagTextX, FlagTextY, Color.Black);
+            _graphics.DrawLine(0, HudNameDividerY + TopMargin, _graphics.Width, HudNameDividerY + TopMargin, Color.Black);
 
             Log($"RenderHudFrameUnsafe draw targets count={count} selected={selectedIndex}");
             DrawCombatListUnsafe(targets, count, selectedIndex);
@@ -616,23 +658,33 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 if (targets[i] == null)
                     continue;
 
-                int rowY = CombatListStartY + (i * CombatListSpacing);
+                int rowY = CombatListStartY + TopMargin + (i * CombatListSpacing);
                 int rssiVal = _lastTargetRssi[i];
                 DrawSignalStrengthUnsafe(_combatListX, rowY + 2, rssiVal);
                 DrawRssiTextUnsafe(_combatListX + SignalBarBlockW, rowY, rssiVal);
 
                 int labelX = _combatListX + SignalColumnW;
-                _graphics.DrawText(i == selectedIndex ? ">" : " ", _font, labelX, rowY, Color.Black);
+                string entry = (i == selectedIndex ? "> " : "  ");
 
-                if (_lastTargetTypes[i] == DeviceType.FlagNode)
-                {
-                    DrawBitmapUnsafe(Icons.Flag, Icons.FlagWidth, labelX + CharWidth, rowY, Color.Black);
-                    _graphics.DrawText(targets[i], _font, labelX + CharWidth + Icons.FlagWidth + 2, rowY, Color.Black);
+                // Prefix flag node
+                if (_lastTargetTypes[i] == DeviceType.FlagNode) {
+                    entry += "🚩 ";
                 }
-                else
+                entry += targets[i];
+
+                // Append team name (if any, all opponents show their team color)
+                if (_lastTargetTeams != null && !string.IsNullOrEmpty(_lastTargetTeams[i]))
                 {
-                    _graphics.DrawText(targets[i], _font, labelX + CharWidth, rowY, Color.Black);
+                    entry += " " + _lastTargetTeams[i].ToUpper();
                 }
+
+                // Append RSSI if configured
+                if (_lastShowRssi)
+                {
+                    entry += $" ({_lastTargetRssi[i]})";
+                }
+
+                _graphics.DrawText(entry, _font, labelX, rowY, Color.Black);
             }
         }
 
@@ -680,13 +732,21 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _graphics.DrawText(label, _font, x, y, Color.Black);
         }
 
-        private void CacheTargetsUnsafe(string[] targets, int count, int selectedIndex, int[] rssi, byte[] targetTypes)
+        // Public method for instant hardware flush from GamerDevice
+        public void Flush()
+        {
+            _display.Flush();
+        }
+
+
+        private void CacheTargetsUnsafe(string[] targets, int count, int selectedIndex, int[] rssi, byte[] targetTypes, string[] targetTeams = null)
         {
             for (int i = 0; i < MaxRenderedTargets; i++)
             {
                 _lastTargets[i] = null;
                 _lastTargetRssi[i] = UnknownRssi;
                 _lastTargetTypes[i] = DeviceType.Player;
+                _lastTargetTeams[i] = null;
             }
 
             _lastTargetCount = 0;
@@ -708,6 +768,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     _lastTargetRssi[i] = rssi[i];
                 if (targetTypes != null && i < targetTypes.Length)
                     _lastTargetTypes[i] = targetTypes[i];
+                if (targetTeams != null && i < targetTeams.Length)
+                    _lastTargetTeams[i] = targetTeams[i];
                 _lastTargetCount++;
             }
         }

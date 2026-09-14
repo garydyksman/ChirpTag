@@ -2,12 +2,22 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "nanoFramework: Launch and Debug",
+      "name": "nanoFramework: Launch and Debug ChirpTagFlagNode",
       "type": "nanoframework",
       "request": "launch",
-      "program": "${workspaceFolder}/ChirpTagFlagNode/bin/Debug",
-      "device": "",
+      "program": "${workspaceFolder}/ChirpTagFlagNode/bin/Debug/ChirpTagFlagNode.bin",
+      "device": "/dev/cu.usbmodem1234561",
       "stopOnEntry": true,
+      "deployAssemblies": true,
+      "verbosity": "debug"
+    },
+    {
+      "name": "nanoFramework: Launch and Debug ChirpTag",
+      "type": "nanoframework",
+      "request": "launch",
+      "program": "${workspaceFolder}/ChirpTag/bin/Debug/ChirpTag.pe",
+      "device": "/dev/tty.usbmodem1234561",
+      "stopOnEntry": false,
       "deployAssemblies": true,
       "verbosity": "debug"
     }

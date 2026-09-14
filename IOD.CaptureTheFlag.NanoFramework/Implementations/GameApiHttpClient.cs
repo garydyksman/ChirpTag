@@ -50,6 +50,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
             _root = baseUrl.TrimEnd('/');
             _sslVerification = sslVerification;
+
+            Debug.WriteLine("Base url set: " + _root);
         }
 
         private void ConfigureRequest(HttpWebRequest req)
@@ -90,6 +92,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                             DeviceId = (byte)ClampByte(p != null ? p.DeviceId : 0),
                             Name = p != null && p.Name != null ? p.Name : string.Empty,
                             Team = p != null && p.Team != null ? p.Team : string.Empty,
+                            Type = p != null && p.Type != null ? p.Type : string.Empty,
                             CombatScore = (byte)ClampByte(p != null ? p.CombatScore : 0),
                             EnemyFlagId = (byte)ClampByte(p != null ? p.EnemyFlagId : 0),
                         };
@@ -132,6 +135,59 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Debug.WriteLine("[GameApi] Register summary: " + ex.Message);
                 Debug.WriteLine("[GameApi] Register chain: " + FormatExceptionChainForLog(ex, 8));
+                return new PlayerSetup { DeviceId = 0 };
+            }
+        }
+
+        public PlayerSetup RegisterPlayer(string macAddress, string playerName)
+        {
+            try
+            {
+                var body = new Hashtable();
+                body.Add("macAddress", macAddress != null ? macAddress : string.Empty);
+                if (playerName != null && playerName.Length > 0)
+                {
+                    body.Add("playerName", NormalizePlayerName(playerName));
+                }
+
+                string jsonBody = JsonSerializer.SerializeObject(body);
+                string json = PostJson("/api/game/register/player", jsonBody);
+                var dto = (PlayerSetupDto)JsonConvert.DeserializeObject(json, typeof(PlayerSetupDto), JsonOptions);
+                if (dto == null)
+                {
+                    return new PlayerSetup { DeviceId = 0 };
+                }
+
+                return new PlayerSetup { DeviceId = (byte)ClampByte(dto.DeviceId) };
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[GameApi] RegisterPlayer summary: " + ex.Message);
+                Debug.WriteLine("[GameApi] RegisterPlayer chain: " + FormatExceptionChainForLog(ex, 8));
+                return new PlayerSetup { DeviceId = 0 };
+            }
+        }
+
+        public PlayerSetup RegisterFlagNode(string macAddress)
+        {
+            try
+            {
+                var body = new Hashtable();
+                body.Add("macAddress", macAddress != null ? macAddress : string.Empty);
+                string jsonBody = JsonSerializer.SerializeObject(body);
+                string json = PostJson("/api/game/register/flagnode", jsonBody);
+                var dto = (PlayerSetupDto)JsonConvert.DeserializeObject(json, typeof(PlayerSetupDto), JsonOptions);
+                if (dto == null)
+                {
+                    return new PlayerSetup { DeviceId = 0 };
+                }
+
+                return new PlayerSetup { DeviceId = (byte)ClampByte(dto.DeviceId) };
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[GameApi] RegisterFlagNode summary: " + ex.Message);
+                Debug.WriteLine("[GameApi] RegisterFlagNode chain: " + FormatExceptionChainForLog(ex, 8));
                 return new PlayerSetup { DeviceId = 0 };
             }
         }
@@ -618,6 +674,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             public int DeviceId { get; set; }
             public string Name { get; set; }
             public string Team { get; set; }
+            public string Type { get; set; }
             public int CombatScore { get; set; }
             public int EnemyFlagId { get; set; }
         }

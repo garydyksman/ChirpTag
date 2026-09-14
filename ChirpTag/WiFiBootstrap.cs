@@ -1,6 +1,7 @@
 using System;
 using System.Diagnostics;
 using System.Device.Wifi;
+using System.Net.NetworkInformation;
 using System.Threading;
 
 namespace ChirpTag
@@ -24,7 +25,7 @@ namespace ChirpTag
     /// </summary>
     public static class WiFiBootstrap
     {
-        /// <summary>WPA2-PSK credentials come from <see cref="ChirpTagSettings"/> (built-in defaults + optional <c>I:\appsettings.json</c>). Empty SSID skips Wi-Fi.</summary>
+        /// <summary>WPA2-PSK credentials come from <see cref="ChirpTagSettings"/> (sourced from <c>LocalConfig.cs</c>). Empty SSID skips Wi-Fi.</summary>
 
         /// <summary>Delay after power rails / pin mux so Wi-Fi can start cleanly.</summary>
         public const int RadioSettleMs = 500;
@@ -47,6 +48,52 @@ namespace ChirpTag
 
         public static bool IsConfigured =>
             ChirpTagSettings.WifiSsid != null && ChirpTagSettings.WifiSsid.Length > 0;
+
+        /// <summary>
+        /// Gets the WiFi MAC address as a colon-separated hex string (e.g. "AA:BB:CC:DD:EE:FF").
+        /// Returns empty string if no WiFi interface found.
+        /// </summary>
+        public static string GetMacAddress()
+        {
+            try
+            {
+                NetworkInterface[] interfaces = NetworkInterface.GetAllNetworkInterfaces();
+                if (interfaces == null || interfaces.Length == 0)
+                {
+                    return string.Empty;
+                }
+
+                byte[] mac = interfaces[0].PhysicalAddress;
+                if (mac == null || mac.Length == 0)
+                {
+                    return string.Empty;
+                }
+
+                string result = string.Empty;
+                for (int i = 0; i < mac.Length; i++)
+                {
+                    if (i > 0)
+                    {
+                        result = result + ":";
+                    }
+
+                    result = result + ByteToHex(mac[i]);
+                }
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[WiFiBootstrap] GetMacAddress: " + ex);
+                return string.Empty;
+            }
+        }
+
+        private static string ByteToHex(byte b)
+        {
+            const string hex = "0123456789ABCDEF";
+            return new string(new char[] { hex[b >> 4], hex[b & 0x0F] });
+        }
 
         private static void OnAvailableNetworksChanged(WifiAdapter sender, object e)
         {
