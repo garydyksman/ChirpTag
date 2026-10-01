@@ -1,4 +1,7 @@
 {
   "nanoFramework.serialPort": "/dev/tty.usbmodem1234561",
-  "nanoFramework.autoSelectDevice": false
+  "nanoFramework.autoSelectDevice": false,
+  "chat.tools.terminal.autoApprove": {
+    "git commit": true
+  }
 }
