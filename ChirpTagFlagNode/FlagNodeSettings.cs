@@ -3,8 +3,6 @@ namespace ChirpTagFlagNode
     /// <summary>Runtime values sourced from <see cref="LocalConfig"/>.</summary>
     public static class FlagNodeSettings
     {
-        public static byte FlagNodeId = LocalConfig.FLAG_NODE_ID;
-
         public static string WifiSsid = LocalConfig.WIFI_SSID;
 
         public static string WifiPassword = LocalConfig.WIFI_PASSWORD;

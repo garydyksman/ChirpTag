@@ -17,7 +17,6 @@ namespace ChirpTagFlagNode
         public const string WIFI_SSID = "YourWiFiNetwork";
         public const string WIFI_PASSWORD = "YourPassword";
         public const string API_URL = "https://your-tunnel.devtunnels.ms";
-        public const byte FLAG_NODE_ID = 16;
 
         // Optional settings
         public const bool SSL_NO_VERIFY = true;

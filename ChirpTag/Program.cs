@@ -389,6 +389,9 @@ namespace ChirpTag
             _device.OnGameStart();
             Log("[Program] Enter main input loop");
 
+            const int EndCheckEveryNTicks = 30_000 / 25; // check every ~30 s
+            int endCheckTick = 0;
+
             while (true)
             {
                 if (_attackRequested)
@@ -403,6 +406,37 @@ namespace ChirpTag
                     _cycleTargetsRequested = false;
                     Log("Processing cycle-targets button");
                     _device.OnCycleTargetsButtonPressed();
+                }
+
+                endCheckTick++;
+                if (endCheckTick >= EndCheckEveryNTicks)
+                {
+                    endCheckTick = 0;
+                    Log("[EndCheck] Pausing LoRa for game-end poll");
+                    lora.StopPolling();
+                    WifiHttpBootOutcome outcome = wifiBridge.EnableForHttp();
+                    if (outcome == WifiHttpBootOutcome.Connected)
+                    {
+                        try
+                        {
+                            GameInfo endInfo = http.GetCurrentGame();
+                            if (endInfo != null && endInfo.Status == GameStatus.Ended)
+                            {
+                                Log("[EndCheck] Game ended, winner=" + endInfo.WinnerId.ToString());
+                                wifiBridge.TearDownRadio();
+                                _device.OnGameEnd(endInfo.WinnerId);
+                                while (true) { Thread.Sleep(60_000); }
+                            }
+                        }
+                        catch (Exception endEx)
+                        {
+                            Log("[EndCheck] Error: " + endEx.Message);
+                        }
+
+                        wifiBridge.TearDownRadio();
+                    }
+
+                    lora.StartPolling();
                 }
 
                 Thread.Sleep(25);

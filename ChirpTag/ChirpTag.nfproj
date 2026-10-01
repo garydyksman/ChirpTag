@@ -66,6 +66,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <None Include="LocalConfig.cs" />
     <None Include="LocalConfig.template.cs" />
     <None Include="packages.config" />
   </ItemGroup>

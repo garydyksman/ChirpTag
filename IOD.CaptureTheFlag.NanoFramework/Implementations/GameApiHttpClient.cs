@@ -105,7 +105,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         "[HTTP] GetCurrentGame status=" + ((int)status).ToString() + " players=" + players.Length.ToString());
                 }
 
-                return new GameInfo { Status = status, Players = players };
+                return new GameInfo { Status = status, Players = players, WinnerId = (byte)ClampByte(dto.WinnerId) };
             }
             catch (Exception ex)
             {
@@ -225,6 +225,26 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Debug.WriteLine("[GameApi] ReportDeliver: " + ex);
                 return false;
+            }
+        }
+
+        public byte[] GetFlagKey(byte flagNodeId)
+        {
+            try
+            {
+                string json = GetJson(_root + "/api/game/flagnode/" + flagNodeId.ToString() + "/key", "/api/game/flagnode/key");
+                var dto = (FlagKeyDto)JsonConvert.DeserializeObject(json, typeof(FlagKeyDto), JsonOptions);
+                if (dto == null || dto.Key == null || dto.Key.Length == 0)
+                {
+                    return new byte[4];
+                }
+
+                return Convert.FromBase64String(dto.Key);
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine("[GameApi] GetFlagKey: " + ex);
+                return new byte[4];
             }
         }
 
@@ -667,6 +687,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             public int Status { get; set; }
             public PlayerInfoDto[] Players { get; set; }
+            public int WinnerId { get; set; }
         }
 
         private sealed class PlayerInfoDto
@@ -693,6 +714,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             public int DeviceId { get; set; }
             public int CombatScore { get; set; }
+        }
+
+        private sealed class FlagKeyDto
+        {
+            public string Key { get; set; }
         }
     }
 }

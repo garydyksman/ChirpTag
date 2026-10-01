@@ -1,6 +1,5 @@
 using System;
 using System.Threading;
-using Iot.Device.Ssd13xx;
 using Iot.Device.LoRa.Drivers.Sx1262;
 using IOD.CaptureTheFlag.NanoFramework.Interfaces;
 using IOD.CaptureTheFlag.NanoFramework.Implementations;
@@ -14,13 +13,15 @@ namespace ChirpTagFlagNode
 
         private readonly byte _flagNodeId;
         private readonly Sx1262 _lora;
-        private readonly Ssd1306 _display;
+        private readonly SimpleOled _display;
         private readonly IPacketBuilder _builder;
         private readonly IMessageHandler _messageHandler;
         private readonly TxQueue _txQueue;
         private readonly IGameHttpClient _httpClient;
         private readonly IWifiHttpBridge _wifiHttpBridge;
         private readonly byte[] _heartbeatBytes;
+        private readonly System.Action _pauseLoRa;
+        private readonly System.Action _resumeLoRa;
 
         private byte[] _key;
         private bool _keyTaken;
@@ -42,15 +43,19 @@ namespace ChirpTagFlagNode
         public FlagNodeDevice(
             byte flagNodeId,
             Sx1262 lora,
-            Ssd1306 display,
+            SimpleOled display,
             IGameHttpClient httpClient,
-            IWifiHttpBridge wifiHttpBridge)
+            IWifiHttpBridge wifiHttpBridge,
+            System.Action pauseLoRaForWifi,
+            System.Action resumeLoRaAfterWifi)
         {
             _flagNodeId = flagNodeId;
             _lora = lora;
             _display = display;
             _httpClient = httpClient;
             _wifiHttpBridge = wifiHttpBridge;
+            _pauseLoRa = pauseLoRaForWifi;
+            _resumeLoRa = resumeLoRaAfterWifi;
 
             _builder = new PacketBuilder();
             _messageHandler = new MessageHandler(new PacketParser(), flagNodeId);
@@ -102,20 +107,34 @@ namespace ChirpTagFlagNode
             Console.WriteLine("[FlagNode] Fetching key from server...");
             UpdateDisplay("FLAG NODE", "Fetching key...");
 
+            PauseLoRa();
+            if (!EnableWiFi())
+            {
+                ResumeLoRa();
+                Console.WriteLine("[FlagNode] WiFi failed for key fetch; using fallback key");
+                _key = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD };
+                UpdateDisplay("FLAG NODE", "Key fallback");
+                return;
+            }
+
             try
             {
-                // TODO: Implement server API call to fetch key
-                // For now, generate a placeholder key
-                _key = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD };
+                byte[] fetched = _httpClient.GetFlagKey(_flagNodeId);
+                _key = (fetched != null && fetched.Length > 0) ? fetched : new byte[4];
                 _keyTaken = false;
-
-                Console.WriteLine($"[FlagNode] Key fetched: {BitConverter.ToString(_key)}");
+                Console.WriteLine("[FlagNode] Key fetched");
                 UpdateDisplay("FLAG NODE", "Key ready");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[FlagNode] FetchKey error: {ex.Message}");
+                _key = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD };
                 UpdateDisplay("FLAG NODE", "Key fetch failed");
+            }
+            finally
+            {
+                TearDownWiFi();
+                ResumeLoRa();
             }
         }
 
@@ -221,19 +240,14 @@ namespace ChirpTagFlagNode
 
             try
             {
-                // TODO: Call actual API endpoint
-                // byte score = _httpClient.GetRespawnNumber(deviceId);
-
-                // Placeholder: return random score 1-10
-                byte score = (byte)((deviceId % 10) + 1);
+                byte score = _httpClient.GetRespawnNumber(deviceId);
                 Console.WriteLine($"[FlagNode] Respawn score fetched: {score}");
-
                 return score;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[FlagNode] FetchRespawnNumber error: {ex.Message}");
-                return 5; // Default fallback
+                return 5;
             }
             finally
             {
@@ -256,12 +270,9 @@ namespace ChirpTagFlagNode
 
             try
             {
-                // TODO: Call actual API endpoint
-                // bool success = _httpClient.ReportDeliver(deviceId, key);
-
-                // Placeholder: return success
-                Console.WriteLine("[FlagNode] Deliver reported to server");
-                return true;
+                bool accepted = _httpClient.ReportDeliver(deviceId, key);
+                Console.WriteLine($"[FlagNode] Deliver reported, accepted={accepted}");
+                return accepted;
             }
             catch (Exception ex)
             {
@@ -280,13 +291,21 @@ namespace ChirpTagFlagNode
         private void PauseLoRa()
         {
             Console.WriteLine("[FlagNode] Pausing LoRa for WiFi...");
-            // TODO: Stop listening on LoRa (if needed)
+            if (_pauseLoRa != null)
+            {
+                try { _pauseLoRa(); }
+                catch (Exception ex) { Console.WriteLine($"[FlagNode] PauseLoRa error: {ex.Message}"); }
+            }
         }
 
         private void ResumeLoRa()
         {
             Console.WriteLine("[FlagNode] Resuming LoRa...");
-            // TODO: Resume listening on LoRa (if needed)
+            if (_resumeLoRa != null)
+            {
+                try { _resumeLoRa(); }
+                catch (Exception ex) { Console.WriteLine($"[FlagNode] ResumeLoRa error: {ex.Message}"); }
+            }
         }
 
         private bool EnableWiFi()
@@ -375,14 +394,14 @@ namespace ChirpTagFlagNode
         {
             try
             {
-                _display.ClearScreen();
-                PixelTextRenderer.DrawText(_display, 4, 10, line1, 1);
-                PixelTextRenderer.DrawText(_display, 4, 30, line2, 1);
-                _display.Display();
+                if (_display == null) return;
+                _display.Clear();
+                _display.Print(0, 4, line1);
+                _display.Print(1, 4, line2);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[FlagNode] Display update error: {ex.Message}");
+                Console.WriteLine("[FlagNode] Display update error: " + ex.Message);
             }
         }
     }

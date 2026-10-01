@@ -6,13 +6,13 @@ using System.Device.Wifi;
 using System.Net.Security;
 using System.Net.NetworkInformation;
 using System.Threading;
-using Iot.Device.Ssd13xx;
-using Iot.Device.Ssd13xx.Commands;
+using Iot.Device.LoRa;
 using Iot.Device.LoRa.Drivers.Sx1262;
 using nanoFramework.Hardware.Esp32;
 using nanoFramework.Networking;
 using IOD.CaptureTheFlag.NanoFramework.Enum;
 using IOD.CaptureTheFlag.NanoFramework.Implementations;
+using IOD.CaptureTheFlag.NanoFramework.Interfaces;
 using IOD.CaptureTheFlag.NanoFramework.Types;
 using static IOD.CaptureTheFlag.NanoFramework.Implementations.WiFiHelper;
 
@@ -27,6 +27,7 @@ namespace ChirpTagFlagNode
         private const int SdaPin = 17;
         private const int SclPin = 18;
         private const int OledRstPin = 21;
+        private const int VextPin = 36;  // Active HIGH on V4 — must be set before OLED init
 
         // LoRa SX1262 (SPI1)
         private const int PinLoraMosi = 10;
@@ -45,10 +46,6 @@ namespace ChirpTagFlagNode
         private static bool s_modeChangeRequested = false;
         private static readonly object s_modeLock = new object();
 
-        // Display constants
-        private const int DisplayWidth = 128;
-        private const int DisplayHeight = 64;
-        private const bool EnablePixelText = true;
 
         public static void Main()
         {
@@ -75,6 +72,11 @@ namespace ChirpTagFlagNode
                 var prgButton = gpio.OpenPin(PrgButtonPin, PinMode.InputPullUp);
                 prgButton.ValueChanged += OnPrgButtonPressed;
 
+                // Enable Vext power rail — OLED is unpowered until this is HIGH on V4
+                gpio.OpenPin(VextPin, PinMode.Output);
+                gpio.Write(VextPin, PinValue.High);
+                Thread.Sleep(100);
+
                 Console.WriteLine("[STEP 2/7] Hardware reset OLED...");
                 Thread.Sleep(100);
 
@@ -97,28 +99,22 @@ namespace ChirpTagFlagNode
                 Console.WriteLine("[STEP 4/7] I2C pins mapped");
                 Thread.Sleep(100);
 
-                // Create I2C device
-                var i2c = I2cDevice.Create(new I2cConnectionSettings(I2cBus, Ssd1306.DefaultI2cAddress));
+                // Create I2C device at default SSD1306/SSD1315 address 0x3C
+                var i2c = I2cDevice.Create(new I2cConnectionSettings(I2cBus, 0x3C));
 
                 step = 5;
                 Console.WriteLine("[STEP 5/7] I2C device created");
                 Thread.Sleep(100);
 
-                // Create display
-                var display = new Ssd1306(i2c, Ssd13xx.DisplayResolution.OLED128x64);
-
-                // Use default contrast (127) - seems to work best for this display
-                display.SendCommand(new SetContrastControlForBank0(127));
+                // Raw I2C OLED driver — bypasses nanoFramework Ssd1306 lib quirks
+                var display = new SimpleOled(i2c);
+                display.Init();
 
                 step = 6;
-                Console.WriteLine("[STEP 6/7] Display created - contrast at default (127)");
+                Console.WriteLine("[STEP 6/7] Display init done (raw I2C, ATtiny init sequence)");
                 Thread.Sleep(100);
 
-                // Clear and show test pattern
-                display.ClearScreen();
-                display.DrawFilledRectangle(0, 0, 128, 64, true);
-                display.DrawFilledRectangle(10, 10, 108, 44, false);
-                display.Display();
+                display.Clear();
 
                 step = 7;
                 Console.WriteLine("[STEP 7/7] Display initialized");
@@ -130,13 +126,9 @@ namespace ChirpTagFlagNode
                 step = 8;
                 Console.WriteLine("[STEP 8/12] Connecting to WiFi...");
 
-                display.ClearScreen();
-                if (EnablePixelText)
-                {
-                    PixelTextRenderer.DrawText(display, 6, 6, "FLAG NODE", 1);
-                    PixelTextRenderer.DrawText(display, 6, 20, "WIFI...", 1);
-                }
-                display.Display();
+                display.Clear();
+                display.Print(0, 6, "FLAG NODE");
+                display.Print(1, 6, "WIFI...");
 
                 // Connect to WiFi using WifiNetworkHelper
                 CancellationTokenSource cts = new CancellationTokenSource(60000); // 60 second timeout
@@ -153,13 +145,9 @@ namespace ChirpTagFlagNode
                     {
                         Console.WriteLine($"Exception: {WifiNetworkHelper.HelperException}");
                     }
-                    display.ClearScreen();
-                    if (EnablePixelText)
-                    {
-                        PixelTextRenderer.DrawText(display, 6, 6, "WIFI", 1);
-                        PixelTextRenderer.DrawText(display, 6, 20, "FAILED", 1);
-                    }
-                    display.Display();
+                    display.Clear();
+                    display.Print(0, 6, "WIFI");
+                    display.Print(1, 6, "FAILED");
                     Thread.Sleep(Timeout.Infinite);
                 }
 
@@ -171,13 +159,9 @@ namespace ChirpTagFlagNode
                 Console.WriteLine($"MAC: {macAddress}");
 
                 step = 8;
-                display.ClearScreen();
-                if (EnablePixelText)
-                {
-                    PixelTextRenderer.DrawText(display, 6, 6, "WIFI OK", 1);
-                    PixelTextRenderer.DrawText(display, 6, 20, ni.IPv4Address, 1);
-                }
-                display.Display();
+                display.Clear();
+                display.Print(0, 6, "WIFI OK");
+                display.Print(1, 6, ni.IPv4Address);
                 Thread.Sleep(2000);
 
                 // ================================================================
@@ -190,13 +174,9 @@ namespace ChirpTagFlagNode
                     LocalConfig.API_URL,
                     LocalConfig.SSL_NO_VERIFY ? SslVerification.NoVerification : SslVerification.CertificateRequired);
 
-                display.ClearScreen();
-                if (EnablePixelText)
-                {
-                    PixelTextRenderer.DrawText(display, 6, 6, "REGISTERING", 1);
-                    PixelTextRenderer.DrawText(display, 6, 20, "FLAG NODE", 1);
-                }
-                display.Display();
+                display.Clear();
+                display.Print(0, 6, "REGISTERING");
+                display.Print(1, 6, "FLAG NODE");
 
                 Console.WriteLine("[STEP 9/10] Registering flag node with server...");
                 PlayerSetup setup = httpClient.RegisterFlagNode(macAddress);
@@ -204,28 +184,20 @@ namespace ChirpTagFlagNode
                 if (setup == null || setup.DeviceId == 0)
                 {
                     Console.WriteLine("Failed to register with server!");
-                    display.ClearScreen();
-                    if (EnablePixelText)
-                    {
-                        PixelTextRenderer.DrawText(display, 6, 6, "REGISTER", 1);
-                        PixelTextRenderer.DrawText(display, 6, 20, "FAILED", 1);
-                    }
-                    display.Display();
+                    display.Clear();
+                    display.Print(0, 6, "REGISTER");
+                    display.Print(1, 6, "FAILED");
                     Thread.Sleep(Timeout.Infinite);
                 }
 
                 byte deviceId = setup.DeviceId;
-                Console.WriteLine($"Registered! Device ID: {deviceId}");
+                Console.WriteLine("Registered! Device ID: " + deviceId);
 
                 step = 10;
-                display.ClearScreen();
-                if (EnablePixelText)
-                {
-                    PixelTextRenderer.DrawText(display, 6, 6, "FLAG NODE", 1);
-                    PixelTextRenderer.DrawText(display, 6, 20, "ID: " + deviceId, 1);
-                    PixelTextRenderer.DrawText(display, 6, 34, "REGISTERED", 1);
-                }
-                display.Display();
+                display.Clear();
+                display.Print(0, 6, "FLAG NODE");
+                display.Print(1, 6, "ID: " + deviceId);
+                display.Print(2, 6, "REGISTERED");
                 Thread.Sleep(2000);
 
                 // ================================================================
@@ -247,29 +219,19 @@ namespace ChirpTagFlagNode
                     if (gameInfo == null)
                     {
                         Console.WriteLine("Failed to get game info!");
-                        display.ClearScreen();
-                        if (EnablePixelText)
-                        {
-                            PixelTextRenderer.DrawText(display, 6, 6, "API ERROR", 1);
-                            PixelTextRenderer.DrawText(display, 6, 20, "RETRYING", 1);
-                        }
-                        display.Display();
+                        display.Clear();
+                        display.Print(0, 6, "API ERROR");
+                        display.Print(1, 6, "RETRYING");
                         Thread.Sleep(5000);
                         continue;
                     }
 
-                    string statusText = gameInfo.Status.ToString().ToUpper();
-                    Console.WriteLine($"Game Status: {statusText}");
+                    Console.WriteLine("Game Status: " + gameInfo.Status);
 
-                    display.ClearScreen();
-                    if (EnablePixelText)
-                    {
-                        PixelTextRenderer.DrawText(display, 6, 6, "WAITING", 1);
-                        PixelTextRenderer.DrawText(display, 6, 20, "GAME: " + statusText, 1);
-                        PixelTextRenderer.DrawText(display, 6, 34, "ID: " + deviceId, 1);
-                        PixelTextRenderer.DrawText(display, 6, 48, "POLL: " + pollCount, 1);
-                    }
-                    display.Display();
+                    display.Clear();
+                    display.Print(0, 6, "WAITING");
+                    display.Print(1, 6, "ID: " + deviceId);
+                    display.Print(2, 6, "POLL: " + pollCount);
 
                     if (gameInfo.Status == GameStatus.Active)
                     {
@@ -282,23 +244,20 @@ namespace ChirpTagFlagNode
                 }
 
                 step = 12;
-                display.ClearScreen();
-                if (EnablePixelText)
-                {
-                    PixelTextRenderer.DrawText(display, 6, 6, "FLAG NODE", 1);
-                    PixelTextRenderer.DrawText(display, 6, 20, "GAME ACTIVE", 1);
-                    PixelTextRenderer.DrawText(display, 6, 34, "ID: " + deviceId, 1);
-                }
-                display.Display();
+                display.Clear();
+                display.Print(0, 6, "FLAG NODE");
+                display.Print(1, 6, "GAME ACTIVE");
+                display.Print(2, 6, "ID: " + deviceId);
                 Thread.Sleep(2000);
 
                 // Find our team from the player roster
                 string ourTeam = "UNKNOWN";
                 if (gameInfo != null && gameInfo.Players != null)
                 {
-                    foreach (var player in gameInfo.Players)
+                    for (int pi = 0; pi < gameInfo.Players.Length; pi++)
                     {
-                        if (player.DeviceId == deviceId && !string.IsNullOrEmpty(player.Team))
+                        var player = gameInfo.Players[pi];
+                        if (player != null && player.DeviceId == deviceId && player.Team != null && player.Team.Length > 0)
                         {
                             ourTeam = player.Team;
                             break;
@@ -307,15 +266,80 @@ namespace ChirpTagFlagNode
                 }
                 Console.WriteLine($"Team: {ourTeam}");
 
+                // ================================================================
+                // Phase 3: Tear down WiFi, init LoRa, start game
+                // ================================================================
+                step = 12;
+                Console.WriteLine("[STEP 12/12] Tearing down WiFi for LoRa...");
+                display.Clear();
+                display.Print(0, 6, "FLAG NODE");
+                display.Print(1, 6, "STARTING...");
+
+                // Tear down WiFi so LoRa can start
+                WifiAdapter[] wifiAdapters = WifiAdapter.FindAllAdapters();
+                if (wifiAdapters != null)
+                {
+                    for (int wi = 0; wi < wifiAdapters.Length; wi++)
+                    {
+                        if (wifiAdapters[wi] != null)
+                        {
+                            try { wifiAdapters[wi].Disconnect(); } catch { }
+                        }
+                    }
+                }
+                Thread.Sleep(500);
+
+                // Init LoRa SPI
+                Console.WriteLine("Mapping LoRa SPI pins...");
+                Configuration.SetPinFunction(PinLoraMosi, DeviceFunction.SPI1_MOSI);
+                Configuration.SetPinFunction(PinLoraClk, DeviceFunction.SPI1_CLOCK);
+                Configuration.SetPinFunction(PinLoraMiso, DeviceFunction.SPI1_MISO);
+
+                var loraSpi = SpiDevice.Create(new SpiConnectionSettings(1, PinLoraCs)
+                {
+                    ClockFrequency = 1_000_000,
+                    Mode = SpiMode.Mode0,
+                    DataBitLength = 8
+                });
+
+                var lora = new Sx1262(
+                    loraSpi,
+                    resetPin: PinLoraRst,
+                    busyPin: PinLoraBusy,
+                    dio1Pin: PinLoraDio1,
+                    gpioController: gpio,
+                    shouldDispose: false);
+
+                lora.Reset();
+                lora.Initialize();
+                Console.WriteLine("LoRa initialized");
+
+                // Create game device with WiFi bridge and LoRa pause/resume callbacks
+                var wifiBridge = new FlagNodeWifiHttpBridge();
+                var flagNode = new FlagNodeDevice(
+                    deviceId,
+                    lora,
+                    display,
+                    httpClient,
+                    wifiBridge,
+                    () => lora.StopPolling(),
+                    () => lora.StartPolling());
+
+                // Wire LoRa packet received event BEFORE StartPolling
+                lora.PacketReceived += (object s, LoRaMessage msg) =>
+                    flagNode.OnLoRaPacketReceived(msg.Payload, msg.Rssi, msg.Snr);
+
+                // OnGameStart fetches key (which will reconnect WiFi, get key, tear down WiFi, start LoRa polling)
+                flagNode.OnGameStart();
+
                 // Initialize display manager
                 s_displayManager = new FlagNodeDisplayManager(display, DisplayMode.Rotating);
 
                 // ================================================================
                 // Main Loop
                 // ================================================================
-                Console.WriteLine("[STEP 12/12] Entering main loop...");
+                Console.WriteLine("Entering main loop...");
 
-                // Game stats
                 var stats = new FlagNodeStats
                 {
                     DeviceId = deviceId,
@@ -329,13 +353,17 @@ namespace ChirpTagFlagNode
                     UptimeSeconds = 0
                 };
 
+                const int GameEndCheckIntervalS = 30;
+                int gameEndCheckCounter = 0;
+
                 while (true)
                 {
                     Thread.Sleep(1000);
                     stats.UptimeSeconds++;
                     stats.IdleSeconds++;
+                    gameEndCheckCounter++;
 
-                    // Check for mode change request
+                    // Check for mode change request from PRG button
                     bool modeChanged = false;
                     lock (s_modeLock)
                     {
@@ -348,9 +376,38 @@ namespace ChirpTagFlagNode
                         }
                     }
 
-                    Console.WriteLine($"[HEARTBEAT] {stats.UptimeSeconds}s - ID:{deviceId} Team:{ourTeam} Mode:{s_displayManager.CurrentMode} Cap:{stats.CaptureCount} Del:{stats.DeliverCount}");
+                    Console.WriteLine($"[BEAT] {stats.UptimeSeconds}s ID:{deviceId} Team:{ourTeam}");
 
-                    // TODO: Check for LoRa packets and update stats
+                    // Poll server for game end every 30 seconds
+                    if (gameEndCheckCounter >= GameEndCheckIntervalS)
+                    {
+                        gameEndCheckCounter = 0;
+                        Console.WriteLine("[GAME-END] Checking game status...");
+                        lora.StopPolling();
+                        WifiHttpBootOutcome wifiOutcome = wifiBridge.EnableForHttp();
+                        if (wifiOutcome == WifiHttpBootOutcome.Connected)
+                        {
+                            try
+                            {
+                                GameInfo endInfo = httpClient.GetCurrentGame();
+                                if (endInfo != null && endInfo.Status == GameStatus.Ended)
+                                {
+                                    Console.WriteLine($"[GAME-END] Game ended! Winner: {endInfo.WinnerId}");
+                                    wifiBridge.TearDownRadio();
+                                    flagNode.OnGameEnd(endInfo.WinnerId);
+                                    while (true) { Thread.Sleep(60_000); }
+                                }
+                            }
+                            catch (Exception pollEx)
+                            {
+                                Console.WriteLine("[GAME-END] Poll error: " + pollEx.Message);
+                            }
+
+                            wifiBridge.TearDownRadio();
+                        }
+
+                        lora.StartPolling();
+                    }
 
                     // Show mode change feedback
                     if (modeChanged)
@@ -394,111 +451,7 @@ namespace ChirpTagFlagNode
             Thread.Sleep(Timeout.Infinite);
         }
 
-        private static void DrawStartupPattern(Ssd1306 display)
-        {
-            // Border
-            display.DrawHorizontalLine(0, 0, DisplayWidth, true);
-            display.DrawHorizontalLine(0, DisplayHeight - 1, DisplayWidth, true);
-            display.DrawVerticalLine(0, 0, DisplayHeight, true);
-            display.DrawVerticalLine(DisplayWidth - 1, 0, DisplayHeight, true);
 
-            // Crosshair + center marker
-            display.DrawHorizontalLine(0, DisplayHeight / 2, DisplayWidth, true);
-            display.DrawVerticalLine(DisplayWidth / 2, 0, DisplayHeight, true);
-            display.DrawFilledRectangle((DisplayWidth / 2) - 4, (DisplayHeight / 2) - 4, 8, 8, true);
-        }
-
-        private static void ShowRxDebug(Ssd1306 display, int rxCount, byte[] payload, int rssi)
-        {
-            byte from = 0x00;
-            byte type = 0x00;
-
-            if (payload != null && payload.Length >= 2)
-            {
-                from = payload[0];
-                type = payload[1];
-            }
-
-            display.ClearScreen();
-            if (EnablePixelText)
-            {
-                string typeLabel = GetPacketTypeLabel(type);
-                string eventText = GetPacketEventText(type);
-
-                PixelTextRenderer.DrawText(display, 6, 6, eventText, 1);
-                PixelTextRenderer.DrawText(display, 6, 18, "COUNT " + rxCount, 1);
-                PixelTextRenderer.DrawText(display, 6, 30, "FROM 0X" + from.ToString("X2"), 1);
-                PixelTextRenderer.DrawText(display, 6, 42, "TYPE " + typeLabel, 1);
-                PixelTextRenderer.DrawText(display, 6, 54, "RSSI " + rssi, 1);
-            }
-            display.Display();
-        }
-
-        private static string GetPacketTypeLabel(byte type)
-        {
-            switch (type)
-            {
-                case PacketType.Heartbeat:
-                    return "HB 01";
-                case PacketType.Attack:
-                    return "ATK 02";
-                case PacketType.AttackAck:
-                    return "AACK 03";
-                case PacketType.FlagTransfer:
-                    return "XFER 04";
-                case PacketType.Capture:
-                    return "CAP 05";
-                case PacketType.KeyGrant:
-                    return "KGRANT 06";
-                case PacketType.Deliver:
-                    return "DELIV 07";
-                case PacketType.RespawnReq:
-                    return "RREQ 08";
-                case PacketType.RespawnAck:
-                    return "RACK 09";
-                case PacketType.GameStart:
-                    return "GSTART 0A";
-                case PacketType.GameEnd:
-                    return "GEND 0B";
-                case PacketType.CombatResult:
-                    return "CRES 0C";
-                default:
-                    return "UNK " + type.ToString("X2");
-            }
-        }
-
-        private static string GetPacketEventText(byte type)
-        {
-            switch (type)
-            {
-                case PacketType.Heartbeat:
-                    return "HEARTBEAT SEEN";
-                case PacketType.Attack:
-                    return "ATTACK RX";
-                case PacketType.AttackAck:
-                    return "ATTACK ACK";
-                case PacketType.FlagTransfer:
-                    return "FLAG XFER";
-                case PacketType.Capture:
-                    return "CAPTURE RX";
-                case PacketType.KeyGrant:
-                    return "KEY GRANT RX";
-                case PacketType.Deliver:
-                    return "DELIVER RX";
-                case PacketType.RespawnReq:
-                    return "RESPAWN REQ";
-                case PacketType.RespawnAck:
-                    return "RESPAWN ACK";
-                case PacketType.GameStart:
-                    return "GAME STARTED";
-                case PacketType.GameEnd:
-                    return "GAME ENDED";
-                case PacketType.CombatResult:
-                    return "COMBAT RESULT";
-                default:
-                    return "UNKNOWN PACKET";
-            }
-        }
 
         private static void OnPrgButtonPressed(object sender, PinValueChangedEventArgs e)
         {

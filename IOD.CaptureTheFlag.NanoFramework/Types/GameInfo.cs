@@ -6,5 +6,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Types
     {
         public GameStatus Status { get; set; }
         public PlayerInfo[] Players { get; set; }
+        public byte WinnerId { get; set; }
     }
 }

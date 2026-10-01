@@ -37,5 +37,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
 
         /// <summary>Gets a new combat score after respawn.</summary>
         byte GetRespawnNumber(byte deviceId);
+
+        /// <summary>Fetches the current flag key for this flag node from the server.</summary>
+        byte[] GetFlagKey(byte flagNodeId);
     }
 }

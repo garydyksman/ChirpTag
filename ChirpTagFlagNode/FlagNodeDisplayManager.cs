@@ -1,5 +1,4 @@
 using System;
-using Iot.Device.Ssd13xx;
 
 namespace ChirpTagFlagNode
 {
@@ -35,11 +34,11 @@ namespace ChirpTagFlagNode
     /// </summary>
     public class FlagNodeDisplayManager
     {
-        private readonly Ssd1306 _display;
+        private readonly SimpleOled _display;
         private DisplayMode _mode;
         private int _rotatingCycle;
 
-        public FlagNodeDisplayManager(Ssd1306 display, DisplayMode initialMode = DisplayMode.Rotating)
+        public FlagNodeDisplayManager(SimpleOled display, DisplayMode initialMode = DisplayMode.Rotating)
         {
             _display = display ?? throw new ArgumentNullException(nameof(display));
             _mode = initialMode;
@@ -65,7 +64,7 @@ namespace ChirpTagFlagNode
         /// </summary>
         public void Render(FlagNodeStats stats)
         {
-            _display.ClearScreen();
+            _display.Clear();
 
             switch (_mode)
             {
@@ -79,7 +78,7 @@ namespace ChirpTagFlagNode
 
                 case DisplayMode.Rotating:
                     _rotatingCycle++;
-                    int subMode = (_rotatingCycle / 3) % 2; // Switch every 6 seconds (3 * 2s update interval)
+                    int subMode = (_rotatingCycle / 3) % 2;
                     if (subMode == 0)
                     {
                         RenderActivity(stats);
@@ -90,8 +89,6 @@ namespace ChirpTagFlagNode
                     }
                     break;
             }
-
-            _display.Display();
         }
 
         /// <summary>
@@ -99,43 +96,36 @@ namespace ChirpTagFlagNode
         /// </summary>
         public void ShowModeChange()
         {
-            _display.ClearScreen();
-
-            string modeName = _mode switch
-            {
-                DisplayMode.Activity => "ACTIVITY",
-                DisplayMode.Stats => "STATS",
-                DisplayMode.Rotating => "ROTATING",
-                _ => "UNKNOWN"
-            };
-
-            PixelTextRenderer.DrawText(_display, 6, 24, "MODE: " + modeName, 1);
-            _display.Display();
+            _display.Clear();
+            string modeName;
+            if (_mode == DisplayMode.Activity) modeName = "ACTIVITY";
+            else if (_mode == DisplayMode.Stats) modeName = "STATS";
+            else modeName = "ROTATING";
+            _display.Print(1, 6, "MODE: " + modeName);
         }
 
         private void RenderActivity(FlagNodeStats stats)
         {
-            PixelTextRenderer.DrawText(_display, 6, 6, "FLAG: " + stats.DeviceId, 1);
-            PixelTextRenderer.DrawText(_display, 6, 20, "TEAM: " + stats.TeamName, 1);
-
+            _display.Print(0, 6, "FLAG: " + stats.DeviceId);
+            _display.Print(1, 6, "TEAM: " + stats.TeamName);
             if (stats.LastSeenDevice > 0)
             {
-                PixelTextRenderer.DrawText(_display, 6, 34, "LAST: ID" + stats.LastSeenDevice, 1);
-                PixelTextRenderer.DrawText(_display, 6, 48, stats.LastActivity, 1);
+                _display.Print(2, 6, "LAST: ID" + stats.LastSeenDevice);
+                _display.Print(3, 6, stats.LastActivity);
             }
             else
             {
-                PixelTextRenderer.DrawText(_display, 6, 34, "IDLE: " + stats.IdleSeconds + "s", 1);
-                PixelTextRenderer.DrawText(_display, 6, 48, "WAITING", 1);
+                _display.Print(2, 6, "IDLE: " + stats.IdleSeconds + "S");
+                _display.Print(3, 6, "WAITING");
             }
         }
 
         private void RenderStats(FlagNodeStats stats)
         {
-            PixelTextRenderer.DrawText(_display, 6, 6, stats.TeamName + " FLAG", 1);
-            PixelTextRenderer.DrawText(_display, 6, 20, "CAPS: " + stats.CaptureCount, 1);
-            PixelTextRenderer.DrawText(_display, 6, 34, "DELS: " + stats.DeliverCount, 1);
-            PixelTextRenderer.DrawText(_display, 6, 48, "UP: " + (stats.UptimeSeconds / 60) + "m", 1);
+            _display.Print(0, 6, stats.TeamName + " FLAG");
+            _display.Print(1, 6, "CAPS: " + stats.CaptureCount);
+            _display.Print(2, 6, "DELS: " + stats.DeliverCount);
+            _display.Print(3, 6, "UP: " + (stats.UptimeSeconds / 60) + "M");
         }
     }
 }
