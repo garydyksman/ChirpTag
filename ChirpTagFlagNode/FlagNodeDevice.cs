@@ -118,9 +118,9 @@ namespace ChirpTagFlagNode
         {
             byte winnerId = _pendingGameEndWinnerId;
             byte gameId = _pendingGameEndGameId;
-            for (int i = 0; i < 5 && _isRunning; i++)
+            for (int i = 0; i < 8 && _isRunning; i++)
             {
-                Console.WriteLine($"[FlagNode] GameEnd relay {i + 1}/5");
+                Console.WriteLine($"[FlagNode] GameEnd relay {i + 1}/8");
                 _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, winnerId, gameId).ToBytes());
                 Thread.Sleep(2_000);
             }
@@ -409,6 +409,21 @@ namespace ChirpTagFlagNode
                     Console.WriteLine($"[FlagNode] TxLoop error: {ex.Message}");
                 }
 
+                Thread.Sleep(500);
+            }
+
+            // Game ended — keep draining for 20 more seconds so any GameEnd broadcasts
+            // still being enqueued by DeliverWorkerThread / GameEndRetransmitThread are sent.
+            Console.WriteLine("[FlagNode] TxLoop draining...");
+            for (int i = 0; i < 40; i++)
+            {
+                try
+                {
+                    byte[] packetBytes = _txQueue.Dequeue();
+                    if (packetBytes != null)
+                        _lora.Send(packetBytes, timeoutMs: 5000);
+                }
+                catch { }
                 Thread.Sleep(500);
             }
 
