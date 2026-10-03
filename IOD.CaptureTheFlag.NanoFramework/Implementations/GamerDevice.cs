@@ -27,7 +27,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         private const int HeartbeatIntervalMs = 5_000;
         private const int TxDrainIntervalMs = 100;
-        private const int UiRefreshIntervalMs = 1_000;
+        private const int UiRefreshIntervalMs = 200;
         private const int CombatTimeoutSeconds = 8;
         private const int DeliverAckTimeoutSeconds = 20;
         private const int CombatResultDelayMs = 2_000;
@@ -384,7 +384,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                             _lastHeartbeatToggleTick = nowTick;
                         }
 
-                        if (!didDisplayWork && !_displayPriorityPending && _needHeartbeatHeaderRefresh)
+                        if (!didDisplayWork && !_displayPriorityPending && _needHeartbeatHeaderRefresh && !_combatListDirty)
                         {
                             if (_display.TryUpdateHeartbeat())
                                 _needHeartbeatHeaderRefresh = false;
