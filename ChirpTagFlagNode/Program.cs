@@ -267,16 +267,8 @@ namespace ChirpTagFlagNode
                                     {
                                         Console.WriteLine("[GAME-END] Server: game ended. Winner: " + endInfo.WinnerId);
                                         wifiBridge.TearDownRadio();
-                                        // Broadcast GameEnd via LoRa so all game devices hear it
                                         lora.StartPolling();
-                                        byte[] gameEndBytes = new PacketBuilder()
-                                            .GameEnd(deviceId, endInfo.WinnerId, endInfo.GameId).ToBytes();
-                                        for (int i = 0; i < 5; i++)
-                                        {
-                                            Console.WriteLine("[GAME-END] Broadcasting " + (i + 1) + "/5");
-                                            try { lora.Send(gameEndBytes, timeoutMs: 3_000); } catch { }
-                                            Thread.Sleep(2_000);
-                                        }
+                                        // Route through TxQueue/TxLoop — avoids direct Send() racing the poll thread on the SPI bus
                                         flagNode.OnGameEnd(endInfo.WinnerId, endInfo.GameId);
                                     }
                                     else
