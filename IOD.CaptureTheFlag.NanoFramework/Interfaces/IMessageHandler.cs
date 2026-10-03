@@ -30,5 +30,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         event DeliverDelegate DeliverReceived;
         event RespawnReqDelegate RespawnReqReceived;
         event RespawnAckDelegate RespawnAckReceived;
+        event DeliverAckDelegate DeliverAckReceived;
     }
 }

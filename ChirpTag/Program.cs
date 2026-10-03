@@ -171,6 +171,8 @@ namespace ChirpTag
             // ---- Init Display Driver ----
             Log("[Program] Create game display driver");
             var driver = new DisplayDriver(_display, gfx, font);
+            driver.Clear();
+            driver.Clear();
 
             string gameApiBaseUrl = ChirpTagSettings.GameApiBaseUrl == null ? string.Empty : ChirpTagSettings.GameApiBaseUrl.Trim();
             if (gameApiBaseUrl.Length == 0)
@@ -247,6 +249,7 @@ namespace ChirpTag
             // -------------------------------------------------------
             // Phase 2 � register (or rejoin from roster) + wait for Active
             // -------------------------------------------------------
+            driver.Clear();
             // Get MAC address for registration
             string macAddress = WiFiHelper.GetMacAddress();
             Log("[Program] Phase 2 MAC: " + macAddress);
@@ -382,15 +385,13 @@ namespace ChirpTag
                 http,
                 wifiBridge,
                 () => lora.StopPolling(),
-                () => lora.StartPolling());
+                () => lora.StartPolling(),
+                active.GameId);
 
             // Initial HUD
             Log("[Program] Initial OnGameStart");
             _device.OnGameStart();
             Log("[Program] Enter main input loop");
-
-            const int EndCheckEveryNTicks = 30_000 / 25; // check every ~30 s
-            int endCheckTick = 0;
 
             while (true)
             {
@@ -406,37 +407,6 @@ namespace ChirpTag
                     _cycleTargetsRequested = false;
                     Log("Processing cycle-targets button");
                     _device.OnCycleTargetsButtonPressed();
-                }
-
-                endCheckTick++;
-                if (endCheckTick >= EndCheckEveryNTicks)
-                {
-                    endCheckTick = 0;
-                    Log("[EndCheck] Pausing LoRa for game-end poll");
-                    lora.StopPolling();
-                    WifiHttpBootOutcome outcome = wifiBridge.EnableForHttp();
-                    if (outcome == WifiHttpBootOutcome.Connected)
-                    {
-                        try
-                        {
-                            GameInfo endInfo = http.GetCurrentGame();
-                            if (endInfo != null && endInfo.Status == GameStatus.Ended)
-                            {
-                                Log("[EndCheck] Game ended, winner=" + endInfo.WinnerId.ToString());
-                                wifiBridge.TearDownRadio();
-                                _device.OnGameEnd(endInfo.WinnerId);
-                                while (true) { Thread.Sleep(60_000); }
-                            }
-                        }
-                        catch (Exception endEx)
-                        {
-                            Log("[EndCheck] Error: " + endEx.Message);
-                        }
-
-                        wifiBridge.TearDownRadio();
-                    }
-
-                    lora.StartPolling();
                 }
 
                 Thread.Sleep(25);

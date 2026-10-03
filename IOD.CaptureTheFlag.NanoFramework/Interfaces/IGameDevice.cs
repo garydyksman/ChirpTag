@@ -10,6 +10,6 @@
         IMessageHandler Handler { get; }   // wired to the LoRa PacketReceived event
 
         void OnGameStart();
-        void OnGameEnd(byte winnerId);
+        void OnGameEnd(byte winnerId, byte gameId);
     }
 }

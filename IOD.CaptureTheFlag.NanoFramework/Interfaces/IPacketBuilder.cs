@@ -13,7 +13,8 @@
         IPacket RespawnReq(byte deviceId, byte flagNodeId);
         IPacket RespawnAck(byte flagNodeId, byte targetId, byte newCombatNumber);
         IPacket GameStart(byte gmNodeId);
-        IPacket GameEnd(byte gmNodeId, byte winnerId);
+        IPacket GameEnd(byte gmNodeId, byte winnerId, byte gameId);
+        IPacket DeliverAck(byte flagNodeId, byte targetDeviceId, bool accepted);
     }
 
 }

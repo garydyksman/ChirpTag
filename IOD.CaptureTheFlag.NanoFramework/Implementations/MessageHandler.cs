@@ -25,6 +25,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public event DeliverDelegate DeliverReceived;
         public event RespawnReqDelegate RespawnReqReceived;
         public event RespawnAckDelegate RespawnAckReceived;
+        public event DeliverAckDelegate DeliverAckReceived;
 
         public MessageHandler(IPacketParser parser, byte deviceId)
         {
@@ -118,7 +119,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
                 case PacketType.GameEnd:
                     if (VerboseLogging) Log("Handle dispatch GameEndReceived");
-                    GameEndReceived?.Invoke(raw[3]);
+                    GameEndReceived?.Invoke(raw[3], raw[4]);
                     break;
 
                 case PacketType.Attack:
@@ -165,6 +166,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 case PacketType.RespawnAck:
                     if (VerboseLogging) Log("Handle dispatch RespawnAckReceived");
                     RespawnAckReceived?.Invoke(raw[3]);
+                    break;
+
+                case PacketType.DeliverAck:
+                    if (VerboseLogging) Log("Handle dispatch DeliverAckReceived");
+                    DeliverAckReceived?.Invoke(fromDeviceId, raw[3] != 0);
                     break;
 
                 default:

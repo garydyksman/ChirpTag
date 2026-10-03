@@ -31,6 +31,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi);
         void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes);
 
+        // ---- Non-blocking UiLoop variants (return false if display lock is held) ----
+        bool TryUpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes);
+        bool TryUpdateHeartbeat();
+
         // ---- Combat bar ----
         void UpdateCombatBar(int second, int totalSeconds);
 

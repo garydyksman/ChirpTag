@@ -476,7 +476,14 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private string DisplayNameForPeer(byte deviceId)
         {
             if (_peerDeviceTypes[deviceId] == DeviceType.FlagNode)
+            {
+                if (EnemyFlagId != 0)
+                    return deviceId == EnemyFlagId ? "ENEMY FLAG" : "OWN FLAG";
+                // Fallback: compare teams from HTTP roster (works when server doesn't return enemyFlagId)
+                if (!string.IsNullOrEmpty(_myTeam) && !string.IsNullOrEmpty(_peerTeams[deviceId]))
+                    return _peerTeams[deviceId] == _myTeam ? "OWN FLAG" : "ENEMY FLAG";
                 return "Flag 0x" + deviceId.ToString("X2");
+            }
 
             string name = _playerNames[deviceId];
             return string.IsNullOrEmpty(name) ? $"0x{deviceId:X2}" : name;

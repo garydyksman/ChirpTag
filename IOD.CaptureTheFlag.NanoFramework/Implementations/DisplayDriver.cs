@@ -163,7 +163,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Log($"ShowMessage begin mode={_screenMode} line1={line1} line2={line2}");
 
-                BeginFullFrameUnsafe(ScreenMode.Message, false, "ShowMessage");
+                bool modeChange = _screenMode != ScreenMode.Message;
+                if (modeChange)
+                    BeginFullFrameUnsafe(ScreenMode.Message, false, "ShowMessage");
+                else
+                    BeginPartialFrameUnsafe(ScreenMode.Message, false, "ShowMessage");
 
                 Log("ShowMessage draw line1");
                 _graphics.DrawText(line1, _font, 10, 40, Color.Black);
@@ -173,7 +177,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     _graphics.DrawText(line2, _font, 10, 56, Color.Black);
                 }
 
-                CommitFullRefreshUnsafe("ShowMessage");
+                if (modeChange)
+                    CommitFullRefreshUnsafe("ShowMessage");
+                else
+                    CommitPartialRefreshUnsafe("ShowMessage");
                 Log($"ShowMessage end mode={_screenMode}");
             }
         }
@@ -270,7 +277,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             {
                 Log($"ShowCombatResult begin mode={_screenMode} won={won} target={targetName}");
 
-                BeginFullFrameUnsafe(ScreenMode.CombatResult, false, "ShowCombatResult");
+                bool modeChange = _screenMode != ScreenMode.CombatResult;
+                if (modeChange)
+                    BeginFullFrameUnsafe(ScreenMode.CombatResult, false, "ShowCombatResult");
+                else
+                    BeginPartialFrameUnsafe(ScreenMode.CombatResult, false, "ShowCombatResult");
 
                 string line1 = won ? "VICTORY!" : "DEFEATED";
                 string line2 = targetName != null
@@ -286,7 +297,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     _graphics.DrawText(line2, _font, CentreX(line2.Length), 60, Color.Black);
                 }
 
-                CommitFullRefreshUnsafe("ShowCombatResult");
+                if (modeChange)
+                    CommitFullRefreshUnsafe("ShowCombatResult");
+                else
+                    CommitPartialRefreshUnsafe("ShowCombatResult");
                 Log($"ShowCombatResult end mode={_screenMode}");
             }
         }
@@ -474,6 +488,31 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             }
         }
 
+        public bool TryUpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes)
+        {
+            lock (_lock)
+            {
+                if (_screenMode != ScreenMode.Hud) return true;
+                CacheTargetsUnsafe(targets, count, selectedIndex, targetRssi, targetTypes);
+                if (UsePartialHudListRefresh)
+                    RefreshCombatListPartialUnsafe();
+                else if (_lastHudData != null)
+                    RenderHudFrameUnsafe(_lastHudData, _lastTargets, _lastTargetCount, _lastSelectedIndex);
+                return true;
+            }
+        }
+
+        public bool TryUpdateHeartbeat()
+        {
+            lock (_lock)
+            {
+                if (_screenMode != ScreenMode.Hud) return true;
+                _heartState = !_heartState;
+                RefreshHeaderHeartbeatPartialUnsafe();
+                return true;
+            }
+        }
+
         public void UpdateLastTx(string hex)
         {
             lock (_lock)
@@ -548,6 +587,22 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             WaitDisplayReadyUnsafe();
         }
 
+        private void BeginPartialFrameUnsafe(ScreenMode nextMode, bool inverted, string reason)
+        {
+            Log($"BeginPartialFrameUnsafe {_screenMode}->{nextMode} reason={reason}");
+            _screenMode = nextMode;
+            if (inverted)
+                ClearScreenBlackUnsafe();
+            else
+                ClearScreenUnsafe();
+        }
+
+        private void CommitPartialRefreshUnsafe(string reason)
+        {
+            Log($"CommitPartialRefreshUnsafe {reason}");
+            PartialRefreshUnsafe();
+        }
+
         private void RefreshCombatListPartialUnsafe()
         {
             Log("RefreshCombatListPartialUnsafe begin");
@@ -618,7 +673,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (targetName == null)
                 targetName = string.Empty;
 
-            BeginFullFrameUnsafe(ScreenMode.Combat, false, "RenderCombat", powerCycleBeforeDraw);
+            BeginPartialFrameUnsafe(ScreenMode.Combat, false, "RenderCombat");
 
             int swordX = (_graphics.Width - SwordW) / 2;
             Log($"RenderCombatFrameUnsafe draw sword x={swordX}");
@@ -641,7 +696,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log("RenderCombatFrameUnsafe draw bar");
             DrawBarUnsafe(second, totalSeconds);
 
-            CommitFullRefreshUnsafe("RenderCombat");
+            CommitPartialRefreshUnsafe("RenderCombat");
         }
 
         private void DrawCombatListUnsafe(string[] targets, int count, int selectedIndex)

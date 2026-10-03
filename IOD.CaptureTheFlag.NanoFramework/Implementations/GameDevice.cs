@@ -14,7 +14,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public IMessageHandler Handler {get; private set; }
 
-        public virtual void OnGameEnd(byte winnerId)
+        public virtual void OnGameEnd(byte winnerId, byte gameId)
         {
             throw new NotImplementedException();
         }

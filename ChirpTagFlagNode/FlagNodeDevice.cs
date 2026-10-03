@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using Iot.Device.LoRa.Drivers.Sx1262;
+using Iot.Device.Ssd13xx;
 using IOD.CaptureTheFlag.NanoFramework.Interfaces;
 using IOD.CaptureTheFlag.NanoFramework.Implementations;
 using IOD.CaptureTheFlag.NanoFramework.Types;
@@ -13,7 +14,7 @@ namespace ChirpTagFlagNode
 
         private readonly byte _flagNodeId;
         private readonly Sx1262 _lora;
-        private readonly SimpleOled _display;
+        private readonly Ssd1306 _display;
         private readonly IPacketBuilder _builder;
         private readonly IMessageHandler _messageHandler;
         private readonly TxQueue _txQueue;
@@ -26,6 +27,9 @@ namespace ChirpTagFlagNode
         private byte[] _key;
         private bool _keyTaken;
         private bool _isRunning;
+        private byte _pendingDeliverFromId;
+        private byte[] _pendingDeliverKey;
+        private byte _gameId;
 
         private Thread _txThread;
         private Thread _heartbeatThread;
@@ -43,11 +47,12 @@ namespace ChirpTagFlagNode
         public FlagNodeDevice(
             byte flagNodeId,
             Sx1262 lora,
-            SimpleOled display,
+            Ssd1306 display,
             IGameHttpClient httpClient,
             IWifiHttpBridge wifiHttpBridge,
             System.Action pauseLoRaForWifi,
-            System.Action resumeLoRaAfterWifi)
+            System.Action resumeLoRaAfterWifi,
+            byte gameId = 0)
         {
             _flagNodeId = flagNodeId;
             _lora = lora;
@@ -56,6 +61,7 @@ namespace ChirpTagFlagNode
             _wifiHttpBridge = wifiHttpBridge;
             _pauseLoRa = pauseLoRaForWifi;
             _resumeLoRa = resumeLoRaAfterWifi;
+            _gameId = gameId;
 
             _builder = new PacketBuilder();
             _messageHandler = new MessageHandler(new PacketParser(), flagNodeId);
@@ -69,6 +75,7 @@ namespace ChirpTagFlagNode
             _messageHandler.CaptureReceived += OnCaptureReceived;
             _messageHandler.DeliverReceived += OnDeliverReceived;
             _messageHandler.RespawnReqReceived += OnRespawnRequestReceived;
+            _messageHandler.GameEndReceived += OnGameEnd;
 
             // LoRa receive handler will be wired up after LoRa init
             // _lora needs to call SetReceiveMode() first
@@ -95,7 +102,7 @@ namespace ChirpTagFlagNode
             UpdateDisplay("GAME ACTIVE", "Ready");
         }
 
-        public void OnGameEnd(byte winnerId)
+        public void OnGameEnd(byte winnerId, byte gameId)
         {
             Console.WriteLine($"[FlagNode] Game ended. Winner: 0x{winnerId:X2}");
             _isRunning = false;
@@ -176,21 +183,47 @@ namespace ChirpTagFlagNode
 
         public void OnDeliverReceived(byte fromDeviceId, byte[] key)
         {
-            Console.WriteLine($"[FlagNode] Deliver from device 0x{fromDeviceId:X2}, key: {BitConverter.ToString(key)}");
+            Console.WriteLine($"[FlagNode] Deliver from device 0x{fromDeviceId:X2}");
             UpdateDisplay("DELIVER", $"From: 0x{fromDeviceId:X2}");
 
-            // Report to server via HTTP
-            bool success = ReportDeliver(fromDeviceId, key);
+            // Dispatch to background thread so the LoRa poll callback returns immediately.
+            // PauseLoRa/ResumeLoRa must not be called from the poll thread — see DeliverWorkerThread.
+            _pendingDeliverFromId = fromDeviceId;
+            _pendingDeliverKey = key;
+            new Thread(DeliverWorkerThread).Start();
+        }
+
+        private void DeliverWorkerThread()
+        {
+            byte fromDeviceId = _pendingDeliverFromId;
+            byte[] key = _pendingDeliverKey;
+
+            bool success = ReportDeliver(_flagNodeId, key);
 
             if (success)
             {
-                Console.WriteLine("[FlagNode] Delivery successful");
+                Console.WriteLine("[FlagNode] Delivery successful - sending DeliverAck + GameEnd");
                 UpdateDisplay("DELIVER", "Success!");
             }
             else
             {
-                Console.WriteLine("[FlagNode] Delivery failed");
+                Console.WriteLine("[FlagNode] Delivery failed - sending DeliverAck(rejected)");
                 UpdateDisplay("DELIVER", "Failed");
+            }
+
+            var ack = _builder.DeliverAck(_flagNodeId, fromDeviceId, success);
+            _txQueue.Enqueue(ack.ToBytes());
+
+            if (success)
+            {
+                _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, fromDeviceId, _gameId).ToBytes());
+                // Retransmit GameEnd every 3 s for 30 s so devices that missed the first broadcast receive it
+                for (int i = 0; i < 10 && _isRunning; i++)
+                {
+                    Thread.Sleep(3_000);
+                    Console.WriteLine($"[FlagNode] GameEnd retransmit {i + 1}/10");
+                    _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, fromDeviceId, _gameId).ToBytes());
+                }
             }
         }
 
@@ -395,9 +428,10 @@ namespace ChirpTagFlagNode
             try
             {
                 if (_display == null) return;
-                _display.Clear();
-                _display.Print(0, 4, line1);
-                _display.Print(1, 4, line2);
+                _display.ClearScreen();
+                _display.DrawString(4, 6, line1, 1);
+                _display.DrawString(4, 20, line2, 1);
+                _display.Display();
             }
             catch (Exception ex)
             {

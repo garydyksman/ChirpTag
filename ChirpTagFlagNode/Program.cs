@@ -8,6 +8,8 @@ using System.Net.NetworkInformation;
 using System.Threading;
 using Iot.Device.LoRa;
 using Iot.Device.LoRa.Drivers.Sx1262;
+using Iot.Device.Ssd13xx;
+using Iot.Device.Ssd13xx.Commands;
 using nanoFramework.Hardware.Esp32;
 using nanoFramework.Networking;
 using IOD.CaptureTheFlag.NanoFramework.Enum;
@@ -99,22 +101,22 @@ namespace ChirpTagFlagNode
                 Console.WriteLine("[STEP 4/7] I2C pins mapped");
                 Thread.Sleep(100);
 
-                // Create I2C device at default SSD1306/SSD1315 address 0x3C
-                var i2c = I2cDevice.Create(new I2cConnectionSettings(I2cBus, 0x3C));
+                var i2c = I2cDevice.Create(new I2cConnectionSettings(I2cBus, Ssd1306.DefaultI2cAddress));
 
                 step = 5;
                 Console.WriteLine("[STEP 5/7] I2C device created");
                 Thread.Sleep(100);
 
-                // Raw I2C OLED driver — bypasses nanoFramework Ssd1306 lib quirks
-                var display = new SimpleOled(i2c);
-                display.Init();
+                var display = new Ssd1306(i2c, Ssd13xx.DisplayResolution.OLED128x64);
+                display.Font = new BasicFont();
+                display.SendCommand(new SetContrastControlForBank0(255));
 
                 step = 6;
-                Console.WriteLine("[STEP 6/7] Display init done (raw I2C, ATtiny init sequence)");
+                Console.WriteLine("[STEP 6/7] Display created");
                 Thread.Sleep(100);
 
-                display.Clear();
+                display.ClearScreen();
+                display.Display();
 
                 step = 7;
                 Console.WriteLine("[STEP 7/7] Display initialized");
@@ -126,9 +128,10 @@ namespace ChirpTagFlagNode
                 step = 8;
                 Console.WriteLine("[STEP 8/12] Connecting to WiFi...");
 
-                display.Clear();
-                display.Print(0, 6, "FLAG NODE");
-                display.Print(1, 6, "WIFI...");
+                display.ClearScreen();
+                display.DrawString(6, 6, "FLAG NODE", 1);
+                display.DrawString(6, 20, "WIFI...", 1);
+                display.Display();
 
                 // Connect to WiFi using WifiNetworkHelper
                 CancellationTokenSource cts = new CancellationTokenSource(60000); // 60 second timeout
@@ -145,9 +148,10 @@ namespace ChirpTagFlagNode
                     {
                         Console.WriteLine($"Exception: {WifiNetworkHelper.HelperException}");
                     }
-                    display.Clear();
-                    display.Print(0, 6, "WIFI");
-                    display.Print(1, 6, "FAILED");
+                    display.ClearScreen();
+                    display.DrawString(6, 6, "WIFI", 1);
+                    display.DrawString(6, 20, "FAILED", 1);
+                    display.Display();
                     Thread.Sleep(Timeout.Infinite);
                 }
 
@@ -159,9 +163,10 @@ namespace ChirpTagFlagNode
                 Console.WriteLine($"MAC: {macAddress}");
 
                 step = 8;
-                display.Clear();
-                display.Print(0, 6, "WIFI OK");
-                display.Print(1, 6, ni.IPv4Address);
+                display.ClearScreen();
+                display.DrawString(6, 6, "WIFI OK", 1);
+                display.DrawString(6, 20, ni.IPv4Address, 1);
+                display.Display();
                 Thread.Sleep(2000);
 
                 // ================================================================
@@ -174,9 +179,10 @@ namespace ChirpTagFlagNode
                     LocalConfig.API_URL,
                     LocalConfig.SSL_NO_VERIFY ? SslVerification.NoVerification : SslVerification.CertificateRequired);
 
-                display.Clear();
-                display.Print(0, 6, "REGISTERING");
-                display.Print(1, 6, "FLAG NODE");
+                display.ClearScreen();
+                display.DrawString(6, 6, "REGISTERING", 1);
+                display.DrawString(6, 20, "FLAG NODE", 1);
+                display.Display();
 
                 Console.WriteLine("[STEP 9/10] Registering flag node with server...");
                 PlayerSetup setup = httpClient.RegisterFlagNode(macAddress);
@@ -184,9 +190,10 @@ namespace ChirpTagFlagNode
                 if (setup == null || setup.DeviceId == 0)
                 {
                     Console.WriteLine("Failed to register with server!");
-                    display.Clear();
-                    display.Print(0, 6, "REGISTER");
-                    display.Print(1, 6, "FAILED");
+                    display.ClearScreen();
+                    display.DrawString(6, 6, "REGISTER", 1);
+                    display.DrawString(6, 20, "FAILED", 1);
+                    display.Display();
                     Thread.Sleep(Timeout.Infinite);
                 }
 
@@ -194,10 +201,11 @@ namespace ChirpTagFlagNode
                 Console.WriteLine("Registered! Device ID: " + deviceId);
 
                 step = 10;
-                display.Clear();
-                display.Print(0, 6, "FLAG NODE");
-                display.Print(1, 6, "ID: " + deviceId);
-                display.Print(2, 6, "REGISTERED");
+                display.ClearScreen();
+                display.DrawString(6, 6, "FLAG NODE", 1);
+                display.DrawString(6, 20, "ID: " + deviceId, 1);
+                display.DrawString(6, 34, "REGISTERED", 1);
+                display.Display();
                 Thread.Sleep(2000);
 
                 // ================================================================
@@ -219,19 +227,21 @@ namespace ChirpTagFlagNode
                     if (gameInfo == null)
                     {
                         Console.WriteLine("Failed to get game info!");
-                        display.Clear();
-                        display.Print(0, 6, "API ERROR");
-                        display.Print(1, 6, "RETRYING");
+                        display.ClearScreen();
+                        display.DrawString(6, 6, "API ERROR", 1);
+                        display.DrawString(6, 20, "RETRYING", 1);
+                        display.Display();
                         Thread.Sleep(5000);
                         continue;
                     }
 
                     Console.WriteLine("Game Status: " + gameInfo.Status);
 
-                    display.Clear();
-                    display.Print(0, 6, "WAITING");
-                    display.Print(1, 6, "ID: " + deviceId);
-                    display.Print(2, 6, "POLL: " + pollCount);
+                    display.ClearScreen();
+                    display.DrawString(6, 6, "WAITING", 1);
+                    display.DrawString(6, 20, "ID: " + deviceId, 1);
+                    display.DrawString(6, 34, "POLL: " + pollCount, 1);
+                    display.Display();
 
                     if (gameInfo.Status == GameStatus.Active)
                     {
@@ -244,10 +254,11 @@ namespace ChirpTagFlagNode
                 }
 
                 step = 12;
-                display.Clear();
-                display.Print(0, 6, "FLAG NODE");
-                display.Print(1, 6, "GAME ACTIVE");
-                display.Print(2, 6, "ID: " + deviceId);
+                display.ClearScreen();
+                display.DrawString(6, 6, "FLAG NODE", 1);
+                display.DrawString(6, 20, "GAME ACTIVE", 1);
+                display.DrawString(6, 34, "ID: " + deviceId, 1);
+                display.Display();
                 Thread.Sleep(2000);
 
                 // Find our team from the player roster
@@ -271,9 +282,10 @@ namespace ChirpTagFlagNode
                 // ================================================================
                 step = 12;
                 Console.WriteLine("[STEP 12/12] Tearing down WiFi for LoRa...");
-                display.Clear();
-                display.Print(0, 6, "FLAG NODE");
-                display.Print(1, 6, "STARTING...");
+                display.ClearScreen();
+                display.DrawString(6, 6, "FLAG NODE", 1);
+                display.DrawString(6, 20, "STARTING...", 1);
+                display.Display();
 
                 // Tear down WiFi so LoRa can start
                 WifiAdapter[] wifiAdapters = WifiAdapter.FindAllAdapters();
@@ -323,7 +335,8 @@ namespace ChirpTagFlagNode
                     httpClient,
                     wifiBridge,
                     () => lora.StopPolling(),
-                    () => lora.StartPolling());
+                    () => lora.StartPolling(),
+                    gameInfo != null ? gameInfo.GameId : (byte)0);
 
                 // Wire LoRa packet received event BEFORE StartPolling
                 lora.PacketReceived += (object s, LoRaMessage msg) =>
@@ -394,7 +407,7 @@ namespace ChirpTagFlagNode
                                 {
                                     Console.WriteLine($"[GAME-END] Game ended! Winner: {endInfo.WinnerId}");
                                     wifiBridge.TearDownRadio();
-                                    flagNode.OnGameEnd(endInfo.WinnerId);
+                                    flagNode.OnGameEnd(endInfo.WinnerId, endInfo.GameId);
                                     while (true) { Thread.Sleep(60_000); }
                                 }
                             }

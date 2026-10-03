@@ -14,5 +14,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Types
         public const byte GameStart    = 0x0A;  // Data: [ ]
         public const byte GameEnd      = 0x0B;  // Data: [ winnerId ]
         public const byte CombatResult = 0x0C;  // Data: [ winnerId ]
+        public const byte DeliverAck   = 0x0D;  // Data: [ accepted (1=ok, 0=rejected) ]
     }
 }

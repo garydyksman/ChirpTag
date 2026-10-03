@@ -105,7 +105,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         "[HTTP] GetCurrentGame status=" + ((int)status).ToString() + " players=" + players.Length.ToString());
                 }
 
-                return new GameInfo { Status = status, Players = players, WinnerId = (byte)ClampByte(dto.WinnerId) };
+                return new GameInfo { Status = status, Players = players, WinnerId = (byte)ClampByte(dto.WinnerId), GameId = (byte)ClampByte(dto.GameId) };
             }
             catch (Exception ex)
             {
@@ -688,6 +688,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             public int Status { get; set; }
             public PlayerInfoDto[] Players { get; set; }
             public int WinnerId { get; set; }
+            public int GameId { get; set; }
         }
 
         private sealed class PlayerInfoDto

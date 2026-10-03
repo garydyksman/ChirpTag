@@ -26,9 +26,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // ---------------------------------------------------------------
 
         private const int HeartbeatIntervalMs = 5_000;
-        private const int TxDrainIntervalMs = 500;
+        private const int TxDrainIntervalMs = 100;
         private const int UiRefreshIntervalMs = 1_000;
         private const int CombatTimeoutSeconds = 8;
+        private const int DeliverAckTimeoutSeconds = 20;
         private const int CombatResultDelayMs = 2_000;
         private const int HeartbeatIndicatorIntervalMs = 5_000;
         private const int HeartbeatIndicatorQuietWindowMs = 3_000;
@@ -81,6 +82,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private bool _combatResolved = true;
         private string _combatTarget = null;
         private byte _combatTargetDeviceId = 0;
+        private bool _deliverPending = false;
+        private bool _deliverAckReceived = false;
+        private byte _currentGameId;
+        private bool _displayPriorityPending = false;
         private byte _pendingCombatWinnerId;
         private byte _pendingCombatLoserId;
         private bool _pendingCombatLoserHadKey;
@@ -158,10 +163,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             IGameHttpClient httpForRespawn,
             IWifiHttpBridge wifiForHttp,
             System.Action pauseLoRaForWifi,
-            System.Action resumeLoRaAfterWifi)
+            System.Action resumeLoRaAfterWifi,
+            byte gameId = 0)
             : base(state.DeviceId, messageHandler)
         {
             Log($"ctor begin deviceId=0x{state.DeviceId:X2} player={state.PlayerName} state={state.State}");
+            _currentGameId = gameId;
             _state = state;
             _display = display;
             _lora = lora;
@@ -206,6 +213,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             messageHandler.FlagTransferReceived += OnFlagTransferReceived;
             messageHandler.KeyGrantReceived += OnKeyGrantReceived;
             messageHandler.RespawnAckReceived += OnRespawnAckReceived;
+            messageHandler.DeliverAckReceived += OnDeliverAckReceived;
+            messageHandler.GameEndReceived += OnGameEnd;
 
             Log("ctor wiring LoRa PacketReceived");
             _lora.PacketReceived += OnLoRaPacketReceived;
@@ -229,7 +238,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     if (CanAdvertisePresence && !IsCombatRadioWindow)
                     {
                         if (VerboseRadioLogging) Log("HeartbeatLoop sending heartbeat");
-                        _lora.Send(_heartbeatBytes, timeoutMs: 1_000);
+                        _lora.Send(_heartbeatBytes, timeoutMs: 200);
                         if (VerboseRadioLogging) Log("HeartbeatLoop send complete");
                     }
                 }
@@ -261,7 +270,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     while ((pending = _txQueue.Dequeue()) != null)
                     {
                         Log($"TxLoop sending packet remaining={_txQueue.Count}");
-                        _lora.Send(pending, timeoutMs: 1_000);
+                        _lora.Send(pending, timeoutMs: 200);
                         Log("TxLoop send complete");
                     }
                 }
@@ -293,7 +302,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     if (VerboseTickLogging)
                         Log($"UiLoop tick state={_state.State} uiMode={_uiMode} canRenderHud={CanRenderHud} dirty={_combatListDirty}");
 
-                    if (CanRenderHud)
+                    if (CanRenderHud && !_displayPriorityPending)
                     {
                         if (VerboseTickLogging) Log("UiLoop RefreshCombatList begin");
                         _state.RefreshCombatList();
@@ -329,19 +338,27 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                             _combatListDirty = false;
                         }
 
+                        bool didDisplayWork = false;
+
                         if (combatListChanged)
                         {
                             Log("UiLoop rendering combat list");
-                            _display.UpdateCombatList(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
-                            MarkDisplayActivity("combat-list");
-                            CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
-                            _combatListDirty = false;
-                            lock (_crossThreadSignalLock)
+                            if (_display.TryUpdateCombatList(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes))
                             {
-                                _hudListPaintAfterPeerHeartbeat = false;
+                                MarkDisplayActivity("combat-list");
+                                CacheCombatListSnapshot(targets, count, selectedIndex, _scratchCombatRssi, _scratchCombatTypes);
+                                _combatListDirty = false;
+                                lock (_crossThreadSignalLock)
+                                {
+                                    _hudListPaintAfterPeerHeartbeat = false;
+                                }
+                                didDisplayWork = true;
+                                Log("UiLoop combat list rendered dirty=false");
                             }
-
-                            Log("UiLoop combat list rendered dirty=false");
+                            else
+                            {
+                                Log("UiLoop combat list skipped - display lock held");
+                            }
                         }
                         else
                         {
@@ -350,9 +367,27 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                             if (ShouldRenderHeartbeatIndicator())
                             {
                                 Log("UiLoop rendering heartbeat indicator");
-                                _display.UpdateHeartbeat();
-                                MarkDisplayActivity("heartbeat");
+                                if (_display.TryUpdateHeartbeat())
+                                {
+                                    MarkDisplayActivity("heartbeat");
+                                    didDisplayWork = true;
+                                }
                             }
+                        }
+
+                        // Heartbeat header flash: at most one display call per tick, and only
+                        // when no higher-priority action is pending.
+                        long nowTick = DateTime.UtcNow.Ticks;
+                        if (nowTick - _lastHeartbeatToggleTick > 750 * TicksPerMillisecond)
+                        {
+                            _needHeartbeatHeaderRefresh = true;
+                            _lastHeartbeatToggleTick = nowTick;
+                        }
+
+                        if (!didDisplayWork && !_displayPriorityPending && _needHeartbeatHeaderRefresh)
+                        {
+                            if (_display.TryUpdateHeartbeat())
+                                _needHeartbeatHeaderRefresh = false;
                         }
                     }
                 }
@@ -363,22 +398,6 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
                 if (VerboseTickLogging)
                     Log($"UiLoop sleep={UiRefreshIntervalMs}");
-
-                // Heartbeat header flash logic
-                if (CanRenderHud)
-                {
-                    long nowTick = DateTime.UtcNow.Ticks;
-                    if (nowTick - _lastHeartbeatToggleTick > 750 * TicksPerMillisecond) // 750ms
-                    {
-                        _needHeartbeatHeaderRefresh = true;
-                        _lastHeartbeatToggleTick = nowTick;
-                    }
-                    if (_needHeartbeatHeaderRefresh)
-                    {
-                        _display.UpdateHeartbeat();
-                        _needHeartbeatHeaderRefresh = false;
-                    }
-                }
 
                 Thread.Sleep(UiRefreshIntervalMs);
             }
@@ -421,6 +440,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 return;
             }
 
+            if (_deliverPending)
+            {
+                Log("Attack ignored - deliver already pending");
+                return;
+            }
+
             // Refresh once at action time so we do not attack a target that just timed out.
             Log("Attack RefreshCombatList begin");
             _state.RefreshCombatList();
@@ -448,7 +473,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log($"Attack state updated uiMode={_uiMode} pending={_combatPending} resolved={_combatResolved} combatTarget={_combatTarget}");
 
             Log("Attack ShowCombat begin");
+            _displayPriorityPending = true;
             _display.ShowCombat(target.PlayerName, _state.CombatScore);
+            _displayPriorityPending = false;
             MarkDisplayActivity("combat-enter");
             Log("Attack ShowCombat end");
             Log("Attack QueuePacket begin");
@@ -595,7 +622,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _uiMode = UiMode.Combat;
             Log($"OnAttackReceived enter combat uiMode={_uiMode} target=0x{fromDeviceId:X2} name={_combatTarget}");
 
+            _displayPriorityPending = true;
             _display.ShowCombat(_combatTarget, _state.CombatScore);
+            _displayPriorityPending = false;
             (_display as DisplayDriver)?.Flush(); // Immediate e-paper update for combat mode
             MarkDisplayActivity("combat-defend");
 
@@ -780,12 +809,19 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log($"OnGameStart end state={_state.State} uiMode={_uiMode}");
         }
 
-        public override void OnGameEnd(byte winnerId)
+        public override void OnGameEnd(byte winnerId, byte gameId)
         {
-            Log($"OnGameEnd begin winner=0x{winnerId:X2} state={_state.State} uiMode={_uiMode}");
+            Log($"OnGameEnd begin winner=0x{winnerId:X2} gameId={gameId} currentGameId={_currentGameId} state={_state.State} uiMode={_uiMode}");
+            if (_currentGameId != 0 && gameId != 0 && gameId != _currentGameId)
+            {
+                Log($"OnGameEnd ignored: gameId mismatch expected={_currentGameId} got={gameId}");
+                return;
+            }
             lock (_crossThreadSignalLock)
             {
                 _awaitingRespawnAck = false;
+                _deliverPending = false;
+                _deliverAckReceived = true;
             }
 
             _state.SetState(PlayerState.Idle);
@@ -794,10 +830,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _uiMode = UiMode.Message;
             _combatListDirty = false;
             ResetCombatListSnapshot();
-            Log($"OnGameEnd render final HUD state={_state.State} uiMode={_uiMode}");
+            Log($"OnGameEnd showing game-over screen winner=0x{winnerId:X2}");
 
-            // Keeping this compile-safe with the existing render methods you already use.
-            _display.RenderHud(_state.ToHudData());
+            bool weWon = winnerId == _state.DeviceId;
+            _displayPriorityPending = true;
+            _display.ShowMessage("Game Over", weWon ? "You scored!" : "flag delivered");
+            _displayPriorityPending = false;
             MarkDisplayActivity("game-end");
             Log($"OnGameEnd end state={_state.State} uiMode={_uiMode}");
         }
@@ -825,10 +863,32 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             Log($"InteractWithFlagNode flagNode=0x{flagNodeId:X2} hasFlag={_state.HasFlag}");
             if (_state.HasFlag && _state.CarriedKey != null)
             {
-                byte[] key = _state.CarriedKey;
-                QueuePacket(_builder.Deliver(DeviceId, flagNodeId, key));
-                StartReportDeliver(key);
+                if (_deliverPending)
+                {
+                    Log("InteractWithFlagNode ignored - deliver already pending");
+                    return;
+                }
+
+                // Prevent delivering to the enemy flag — must return to own flag to score.
+                if (_state.EnemyFlagId != 0 && flagNodeId == _state.EnemyFlagId)
+                {
+                    Log("InteractWithFlagNode ignored - cannot deliver to enemy flag node");
+                    _displayPriorityPending = true;
+                    _display.ShowMessage("Deliver", "wrong flag!");
+                    _displayPriorityPending = false;
+                    MarkDisplayActivity("deliver-wrong-flag");
+                    StartDeferredHud();
+                    return;
+                }
+
+                _deliverPending = true;
+                _deliverAckReceived = false;
+                QueuePacket(_builder.Deliver(DeviceId, flagNodeId, _state.CarriedKey));
+                _displayPriorityPending = true;
+                _display.ShowMessage("Delivering", "wait for flag");
+                _displayPriorityPending = false;
                 MarkDisplayActivity("flag-deliver");
+                new Thread(DeliverAckTimeoutLoop).Start();
             }
             else
             {
@@ -861,6 +921,56 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             Thread.Sleep(TxDrainIntervalMs + 100);
             ReportDeliverViaHttp(_pendingDeliverKey);
+        }
+
+        public void OnDeliverAckReceived(byte fromFlagNodeId, bool accepted)
+        {
+            Log($"OnDeliverAckReceived from=0x{fromFlagNodeId:X2} accepted={accepted}");
+            if (!_deliverPending)
+            {
+                Log("OnDeliverAckReceived ignored - no deliver pending");
+                return;
+            }
+            _deliverAckReceived = true;
+            _deliverPending = false;
+            if (accepted)
+            {
+                _state.DropFlag();
+                Log("OnDeliverAckReceived accepted - flag dropped");
+            }
+            else
+            {
+                Log("OnDeliverAckReceived rejected by flag node");
+                _display.ShowMessage("Deliver", "rejected");
+                MarkDisplayActivity("deliver-rejected");
+                StartDeferredHud();
+                return;
+            }
+            EnterHud();
+        }
+
+        private void DeliverAckTimeoutLoop()
+        {
+            Log("DeliverAckTimeoutLoop start");
+            for (int sec = 1; sec <= DeliverAckTimeoutSeconds; sec++)
+            {
+                Thread.Sleep(1_000);
+                if (_deliverAckReceived || !_deliverPending)
+                {
+                    Log($"DeliverAckTimeoutLoop exit ackReceived={_deliverAckReceived}");
+                    return;
+                }
+            }
+            if (_deliverPending)
+            {
+                Log("DeliverAckTimeoutLoop timeout - no ack from flag node");
+                _deliverPending = false;
+                _deliverAckReceived = false;
+                _display.ShowMessage("Deliver", "no response");
+                MarkDisplayActivity("deliver-timeout");
+                StartDeferredHud();
+            }
+            Log("DeliverAckTimeoutLoop end");
         }
 
         private void StartDeferredHud()
@@ -910,6 +1020,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 case PacketType.AttackAck:
                 case PacketType.CombatResult:
                 case PacketType.RespawnAck:
+                case PacketType.DeliverAck:
+                case PacketType.GameEnd:
                     return false;
 
                 default:
