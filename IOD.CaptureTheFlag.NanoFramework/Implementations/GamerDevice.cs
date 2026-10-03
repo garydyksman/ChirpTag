@@ -498,23 +498,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             }
 
             _state.CycleTargets();
-            Log($"CycleTargets selectedIndex={_state.SelectedIndex} immediate repaint");
-
-            // Paint immediately on the calling thread rather than waiting for the next
-            // UiLoop tick (which could be up to 1s away, plus any ongoing heartbeat refresh).
-            _state.RefreshCombatList();
-            string[] targets = _state.GetCombatTargets(out int count);
-            _state.CopyCombatTargetRssi(_scratchCombatRssi, MaxRenderedTargets);
-            _state.CopyCombatTargetTypes(_scratchCombatTypes, MaxRenderedTargets);
-            if (_display.TryUpdateCombatList(targets, count, _state.SelectedIndex, _scratchCombatRssi, _scratchCombatTypes))
-            {
-                CacheCombatListSnapshot(targets, count, _state.SelectedIndex, _scratchCombatRssi, _scratchCombatTypes);
-                _combatListDirty = false;
-            }
-            else
-            {
-                _combatListDirty = true;
-            }
+            _combatListDirty = true;
+            Log($"CycleTargets end selectedIndex={_state.SelectedIndex} dirty={_combatListDirty}");
         }
 
         // ---------------------------------------------------------------
