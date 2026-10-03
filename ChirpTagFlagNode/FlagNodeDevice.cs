@@ -30,6 +30,8 @@ namespace ChirpTagFlagNode
         private byte _pendingDeliverFromId;
         private byte[] _pendingDeliverKey;
         private byte _gameId;
+        private byte _pendingGameEndWinnerId;
+        private byte _pendingGameEndGameId;
 
         private Thread _txThread;
         private Thread _heartbeatThread;
@@ -43,6 +45,7 @@ namespace ChirpTagFlagNode
         public byte FlagNodeId => _flagNodeId;
         public byte[] Key => _key;
         public bool KeyTaken => _keyTaken;
+        public bool IsRunning => _isRunning;
 
         public FlagNodeDevice(
             byte flagNodeId,
@@ -104,9 +107,24 @@ namespace ChirpTagFlagNode
 
         public void OnGameEnd(byte winnerId, byte gameId)
         {
-            Console.WriteLine($"[FlagNode] Game ended. Winner: 0x{winnerId:X2}");
-            _isRunning = false;
+            Console.WriteLine($"[FlagNode] Game ended. Winner: 0x{winnerId:X2} — relaying via LoRa");
             UpdateDisplay("GAME OVER", $"Winner: 0x{winnerId:X2}");
+            _pendingGameEndWinnerId = winnerId;
+            _pendingGameEndGameId = gameId;
+            new Thread(GameEndRetransmitThread).Start();
+        }
+
+        private void GameEndRetransmitThread()
+        {
+            byte winnerId = _pendingGameEndWinnerId;
+            byte gameId = _pendingGameEndGameId;
+            for (int i = 0; i < 5 && _isRunning; i++)
+            {
+                Console.WriteLine($"[FlagNode] GameEnd relay {i + 1}/5");
+                _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, winnerId, gameId).ToBytes());
+                Thread.Sleep(2_000);
+            }
+            _isRunning = false;
         }
 
         public void FetchKeyFromServer()
