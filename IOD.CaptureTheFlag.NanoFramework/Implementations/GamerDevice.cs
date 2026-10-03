@@ -28,9 +28,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int HeartbeatIntervalMs = 5_000;
         private const int TxDrainIntervalMs = 100;
         private const int UiRefreshIntervalMs = 200;
-        private const int CombatTimeoutSeconds = 8;
-        private const int DeliverAckTimeoutSeconds = 20;
-        private const int CombatResultDelayMs = 2_000;
+        private const int CombatTimeoutSeconds = 5;
+        private const int DeliverAckTimeoutSeconds = 12;
+        private const int CombatResultDelayMs = 1_500;
         private const int HeartbeatIndicatorIntervalMs = 5_000;
         private const int HeartbeatIndicatorQuietWindowMs = 3_000;
         private const long TicksPerMillisecond = 10_000L;
