@@ -407,7 +407,18 @@ namespace ChirpTagFlagNode
                                 {
                                     Console.WriteLine($"[GAME-END] Game ended! Winner: {endInfo.WinnerId}");
                                     wifiBridge.TearDownRadio();
-                                    flagNode.OnGameEnd(endInfo.WinnerId, endInfo.GameId);
+                                    // Broadcast GameEnd via LoRa so game devices learn the game is over
+                                    lora.StartPolling();
+                                    var builder = new IOD.CaptureTheFlag.NanoFramework.Implementations.PacketBuilder();
+                                    byte winnerId = endInfo.WinnerId;
+                                    byte[] gameEndBytes = builder.GameEnd(deviceId, winnerId, endInfo.GameId).ToBytes();
+                                    for (int i = 0; i < 5; i++)
+                                    {
+                                        Console.WriteLine($"[GAME-END] Broadcasting GameEnd via LoRa ({i + 1}/5)");
+                                        try { lora.Send(gameEndBytes, timeoutMs: 3000); } catch { }
+                                        Thread.Sleep(2_000);
+                                    }
+                                    flagNode.OnGameEnd(winnerId, endInfo.GameId);
                                     while (true) { Thread.Sleep(60_000); }
                                 }
                             }
