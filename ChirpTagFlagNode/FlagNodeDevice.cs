@@ -24,12 +24,11 @@ namespace ChirpTagFlagNode
         private readonly byte[] _heartbeatBytes;
         private readonly System.Action _pauseLoRa;
         private readonly System.Action _resumeLoRa;
+        private readonly object _runningLock = new object();
 
         private byte[] _key;
         private bool _keyTaken;
         private bool _isRunning;
-        private byte _pendingDeliverFromId;
-        private byte[] _pendingDeliverKey;
         private byte _gameId;
         private byte _pendingGameEndWinnerId;
         private byte _pendingGameEndGameId;
@@ -86,16 +85,41 @@ namespace ChirpTagFlagNode
             _messageHandler.DeliverReceived += OnDeliverReceived;
             _messageHandler.RespawnReqReceived += OnRespawnRequestReceived;
             _messageHandler.GameEndReceived += OnGameEnd;
+        }
 
-            // LoRa receive handler will be wired up after LoRa init
-            // _lora needs to call SetReceiveMode() first
+        // ---- Job classes — capture args before background-thread dispatch ----
+
+        private sealed class DeliverJob
+        {
+            private readonly FlagNodeDevice _owner;
+            private readonly byte _fromDeviceId;
+            private readonly byte[] _key;
+            internal DeliverJob(FlagNodeDevice owner, byte fromDeviceId, byte[] key)
+            {
+                _owner = owner;
+                _fromDeviceId = fromDeviceId;
+                _key = key;
+            }
+            internal void Run() { _owner.DeliverWorkerThreadImpl(_fromDeviceId, _key); }
+        }
+
+        private sealed class RespawnJob
+        {
+            private readonly FlagNodeDevice _owner;
+            private readonly byte _fromDeviceId;
+            internal RespawnJob(FlagNodeDevice owner, byte fromDeviceId)
+            {
+                _owner = owner;
+                _fromDeviceId = fromDeviceId;
+            }
+            internal void Run() { _owner.RespawnWorkerThreadImpl(_fromDeviceId); }
         }
 
         // IGameDevice lifecycle methods
         public void OnGameStart()
         {
             Console.WriteLine("[FlagNode] Game starting...");
-            _isRunning = true;
+            lock (_runningLock) { _isRunning = true; }
 
             // Fetch key from server
             FetchKeyFromServer();
@@ -114,6 +138,11 @@ namespace ChirpTagFlagNode
 
         public void OnGameEnd(byte winnerId, byte gameId)
         {
+            if (gameId != _gameId)
+            {
+                Console.WriteLine($"[FlagNode] OnGameEnd: game ID mismatch ({gameId} != {_gameId}), ignoring");
+                return;
+            }
             Console.WriteLine($"[FlagNode] Game ended. Winner: 0x{winnerId:X2} — relaying via LoRa");
             UpdateDisplay("GAME OVER", $"Winner: 0x{winnerId:X2}");
             _pendingGameEndWinnerId = winnerId;
@@ -131,7 +160,7 @@ namespace ChirpTagFlagNode
                 _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, winnerId, gameId).ToBytes());
                 Thread.Sleep(2_000);
             }
-            _isRunning = false;
+            lock (_runningLock) { _isRunning = false; }
         }
 
         public void FetchKeyFromServer()
@@ -143,9 +172,8 @@ namespace ChirpTagFlagNode
             if (!EnableWiFi())
             {
                 ResumeLoRa();
-                Console.WriteLine("[FlagNode] WiFi failed for key fetch; using fallback key");
-                _key = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD };
-                UpdateDisplay("FLAG NODE", "Key fallback");
+                Console.WriteLine("[FlagNode] WiFi failed for key fetch; key unavailable until retry");
+                UpdateDisplay("FLAG NODE", "Key unavail");
                 return;
             }
 
@@ -160,7 +188,7 @@ namespace ChirpTagFlagNode
             catch (Exception ex)
             {
                 Console.WriteLine($"[FlagNode] FetchKey error: {ex.Message}");
-                _key = new byte[] { 0xAA, 0xBB, 0xCC, 0xDD };
+                _key = new byte[4];
                 UpdateDisplay("FLAG NODE", "Key fetch failed");
             }
             finally
@@ -176,7 +204,6 @@ namespace ChirpTagFlagNode
         {
             try
             {
-                // Pass raw packet to message handler for parsing and routing
                 _messageHandler.Handle(receivedPacket, rssi, snr);
             }
             catch (Exception ex)
@@ -198,13 +225,17 @@ namespace ChirpTagFlagNode
                 return;
             }
 
-            // Grant key to player
-            Console.WriteLine($"[FlagNode] Granting key to device 0x{fromDeviceId:X2}");
-            SendKeyGrant(fromDeviceId);
-
-            _keyTaken = true;
-            _captureCount++;
-            UpdateDisplay("KEY CAPTURED", $"By: 0x{fromDeviceId:X2}");
+            if (SendKeyGrant(fromDeviceId))
+            {
+                _keyTaken = true;
+                _captureCount++;
+                UpdateDisplay("KEY CAPTURED", $"By: 0x{fromDeviceId:X2}");
+            }
+            else
+            {
+                Console.WriteLine("[FlagNode] KeyGrant dropped — TX queue full");
+                UpdateDisplay("CAPTURE", "TX full!");
+            }
         }
 
         public void OnDeliverReceived(byte fromDeviceId, byte[] key)
@@ -213,18 +244,14 @@ namespace ChirpTagFlagNode
             UpdateDisplay("DELIVER", $"From: 0x{fromDeviceId:X2}");
 
             // Dispatch to background thread so the LoRa poll callback returns immediately.
-            // PauseLoRa/ResumeLoRa must not be called from the poll thread — see DeliverWorkerThread.
-            _pendingDeliverFromId = fromDeviceId;
-            _pendingDeliverKey = key;
-            new Thread(DeliverWorkerThread).Start();
+            // Capture args in a job object to avoid racing with the next Deliver packet.
+            var job = new DeliverJob(this, fromDeviceId, key);
+            new Thread(job.Run).Start();
         }
 
-        private void DeliverWorkerThread()
+        internal void DeliverWorkerThreadImpl(byte fromDeviceId, byte[] key)
         {
-            byte fromDeviceId = _pendingDeliverFromId;
-            byte[] key = _pendingDeliverKey;
-
-            bool success = ReportDeliver(_flagNodeId, key);
+            bool success = ReportDeliver(fromDeviceId, key);
 
             if (success)
             {
@@ -259,22 +286,31 @@ namespace ChirpTagFlagNode
             Console.WriteLine($"[FlagNode] Respawn request from device 0x{fromDeviceId:X2}");
             UpdateDisplay("RESPAWN", $"0x{fromDeviceId:X2}");
 
-            // Fetch respawn number from server
-            byte newScore = FetchRespawnNumber(fromDeviceId);
+            // Dispatch to background thread — FetchRespawnNumber calls PauseLoRa/WiFi/HTTP
+            // and must not block the LoRa callback thread.
+            var job = new RespawnJob(this, fromDeviceId);
+            new Thread(job.Run).Start();
+        }
 
+        internal void RespawnWorkerThreadImpl(byte fromDeviceId)
+        {
+            byte newScore = FetchRespawnNumber(fromDeviceId);
             Console.WriteLine($"[FlagNode] Respawn score for 0x{fromDeviceId:X2}: {newScore}");
             SendRespawnAck(fromDeviceId, newScore);
-
             UpdateDisplay("RESPAWN", "Ack sent");
         }
 
         // ---- LoRa TX ----
 
-        public void SendKeyGrant(byte targetDeviceId)
+        public bool SendKeyGrant(byte targetDeviceId)
         {
             var packet = _builder.KeyGrant(_flagNodeId, targetDeviceId, _key);
-            _txQueue.Enqueue(packet.ToBytes());
-            Console.WriteLine($"[FlagNode] Queued KeyGrant to 0x{targetDeviceId:X2}");
+            bool queued = _txQueue.Enqueue(packet.ToBytes());
+            if (queued)
+                Console.WriteLine($"[FlagNode] Queued KeyGrant to 0x{targetDeviceId:X2}");
+            else
+                Console.WriteLine($"[FlagNode] KeyGrant dropped (TX full) to 0x{targetDeviceId:X2}");
+            return queued;
         }
 
         public void SendRespawnAck(byte targetDeviceId, byte newCombatNumber)
@@ -290,12 +326,11 @@ namespace ChirpTagFlagNode
         {
             Console.WriteLine($"[FlagNode] FetchRespawnNumber for device 0x{deviceId:X2}");
 
-            // Pause LoRa, enable WiFi
             PauseLoRa();
             if (!EnableWiFi())
             {
                 ResumeLoRa();
-                return 5; // Default fallback score
+                return 5;
             }
 
             try
@@ -318,9 +353,8 @@ namespace ChirpTagFlagNode
 
         public bool ReportDeliver(byte deviceId, byte[] key)
         {
-            Console.WriteLine($"[FlagNode] ReportDeliver device 0x{deviceId:X2}, key: {BitConverter.ToString(key)}");
+            Console.WriteLine($"[FlagNode] ReportDeliver device 0x{deviceId:X2}, key: [{key.Length}b]");
 
-            // Pause LoRa, enable WiFi
             PauseLoRa();
             if (!EnableWiFi())
             {
@@ -422,7 +456,7 @@ namespace ChirpTagFlagNode
             }
 
             // Game ended — keep draining for 20 more seconds so any GameEnd broadcasts
-            // still being enqueued by DeliverWorkerThread / GameEndRetransmitThread are sent.
+            // still being enqueued by DeliverWorkerThreadImpl / GameEndRetransmitThread are sent.
             Console.WriteLine("[FlagNode] TxLoop draining...");
             for (int i = 0; i < 40; i++)
             {
