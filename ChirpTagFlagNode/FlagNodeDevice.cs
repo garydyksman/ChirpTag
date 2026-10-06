@@ -125,8 +125,16 @@ namespace ChirpTagFlagNode
             Console.WriteLine("[FlagNode] Game starting...");
             lock (_runningLock) { _isRunning = true; }
 
-            // Fetch key from server
-            FetchKeyFromServer();
+            // Fetch key — retry up to 3 times before giving up for the session
+            for (int attempt = 1; attempt <= 3 && !_keyReady; attempt++)
+            {
+                FetchKeyFromServer();
+                if (!_keyReady && attempt < 3)
+                {
+                    Console.WriteLine($"[FlagNode] Key unavailable after attempt {attempt}/3, retrying in 5s");
+                    Thread.Sleep(5_000);
+                }
+            }
 
             // Start TX loop thread
             _txThread = new Thread(TxLoop);

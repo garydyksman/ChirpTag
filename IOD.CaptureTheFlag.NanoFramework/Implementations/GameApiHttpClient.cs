@@ -244,7 +244,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             catch (Exception ex)
             {
                 Debug.WriteLine("[GameApi] GetFlagKey: " + ex);
-                return new byte[4];
+                return null;
             }
         }
 

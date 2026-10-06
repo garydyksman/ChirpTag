@@ -170,7 +170,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
                 case PacketType.DeliverAck:
                     if (VerboseLogging) Log("Handle dispatch DeliverAckReceived");
-                    DeliverAckReceived?.Invoke(fromDeviceId, raw[3] != 0);
+                    if (raw[3] == 0 || raw[3] == 1)
+                        DeliverAckReceived?.Invoke(fromDeviceId, raw[3] == 1);
                     break;
 
                 default:

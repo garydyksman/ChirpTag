@@ -32,12 +32,14 @@ namespace ChirpTagFlagNode
                     return WifiHttpBootOutcome.Connected;
                 }
 
-                Console.WriteLine("[FlagNodeWifi] WiFi connect failed");
+                Console.WriteLine("[FlagNodeWifi] WiFi connect failed — tearing down");
+                TearDownRadio();
                 return WifiHttpBootOutcome.Failed;
             }
             catch (Exception ex)
             {
                 Console.WriteLine("[FlagNodeWifi] EnableForHttp error: " + ex.Message);
+                TearDownRadio();
                 return WifiHttpBootOutcome.Failed;
             }
         }

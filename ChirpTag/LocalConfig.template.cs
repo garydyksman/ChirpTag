@@ -20,7 +20,7 @@ namespace ChirpTag
         public const string PLAYER_NAME = "Player1";
 
         // Optional settings
-        public const bool SSL_NO_VERIFY = true;
+        public const bool SSL_NO_VERIFY = false;
         public const bool ALLOW_HUD_WITHOUT_DEVICE_ID = false;
         public const bool IGNORE_ATTACK_RANGE_LIMIT = false;
         public const bool SHOW_RSSI_IN_COMBAT_LIST = false;

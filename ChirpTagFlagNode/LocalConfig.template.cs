@@ -19,7 +19,7 @@ namespace ChirpTagFlagNode
         public const string API_URL = "https://your-tunnel.devtunnels.ms";
 
         // Optional settings
-        public const bool SSL_NO_VERIFY = true;
+        public const bool SSL_NO_VERIFY = false;
 
         // ============================================================
     }

@@ -43,7 +43,7 @@ namespace ChirpTagFlagNode
         private const int PrgButtonPin = 0;
 
         private const int GameEndCheckIntervalS = 30;
-        private const int GameRestartCooldownS = 15;
+        private const int GameRestartCooldownS = 25;
 
         private static FlagNodeDisplayManager s_displayManager;
         private static bool s_modeChangeRequested = false;
@@ -341,7 +341,7 @@ namespace ChirpTagFlagNode
 
         private static void OnPrgButtonPressed(object sender, PinValueChangedEventArgs e)
         {
-            if (e.ChangeType == PinEventTypes.Rising)
+            if (e.ChangeType == PinEventTypes.Falling)
             {
                 lock (s_modeLock)
                 {
