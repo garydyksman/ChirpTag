@@ -1,0 +1,19 @@
+{
+  "agents": {
+    "ides": [
+      "cursor",
+      "vscode",
+      "jetbrains",
+      "claude"
+    ]
+  },
+  "policy": {
+    "agentsDir": ".agents",
+    "stackDetect": "off",
+    "stacks": [
+      "dotnet",
+      "javascript",
+      "typescript"
+    ]
+  }
+}

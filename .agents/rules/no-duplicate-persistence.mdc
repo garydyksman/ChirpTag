@@ -1,0 +1,11 @@
+---
+id: no-duplicate-persistence
+level: CRITICAL
+alwaysApply: true
+description: Do not create an Ax copy of the canonical Pi conversation.
+---
+
+Do not create an Ax copy of the canonical Pi conversation.
+
+seed: ax-bootstrap
+seedVersion: 2.0.0
