@@ -201,7 +201,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 body.Add("loserId", (int)loserId);
                 body.Add("loserHadKey", loserHadKey);
                 string jsonBody = JsonSerializer.SerializeObject(body);
-                PostJson("/api/game/combat", jsonBody);
+                PostJson("/api/game/combat", jsonBody, false);
             }
             catch (Exception ex)
             {
@@ -545,10 +545,23 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
             if (requestBodyPreview != null && requestBodyPreview.Length > 0)
             {
-                part = part + " requestJson=" + TruncateForLog(requestBodyPreview, 220);
+                part = part + " requestJson=" + TruncateForLog(RedactKeyField(requestBodyPreview), 220);
             }
 
             return part;
+        }
+
+        /// <summary>Redacts the value of a JSON "key" field to avoid logging cryptographic material. nanoFramework has no string.Replace.</summary>
+        private static string RedactKeyField(string json)
+        {
+            if (json == null) return null;
+            int idx = json.IndexOf("\"key\":");
+            if (idx < 0) return json;
+            int valStart = json.IndexOf('"', idx + 6);
+            if (valStart < 0) return json;
+            int valEnd = json.IndexOf('"', valStart + 1);
+            if (valEnd < 0) return json;
+            return json.Substring(0, valStart + 1) + "[REDACTED]" + json.Substring(valEnd);
         }
 
         /// <summary>nanoFramework <see cref="string"/> has no <c>Replace</c>; flatten stack traces for one-line logs.</summary>
