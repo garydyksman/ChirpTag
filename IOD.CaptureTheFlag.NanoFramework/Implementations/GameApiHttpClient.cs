@@ -217,7 +217,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 body.Add("deviceId", (int)deviceId);
                 body.Add("key", key == null || key.Length == 0 ? null : Convert.ToBase64String(key));
                 string jsonBody = JsonSerializer.SerializeObject(body);
-                string json = PostJson("/api/game/deliver", jsonBody);
+                string json = PostJson("/api/game/deliver", jsonBody, false);
                 var dto = (DeliverAcceptedDto)JsonConvert.DeserializeObject(json, typeof(DeliverAcceptedDto), JsonOptions);
                 return dto != null && dto.Accepted;
             }
@@ -290,10 +290,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             }
         }
 
-        private string PostJson(string relativePath, string jsonBody)
+        private string PostJson(string relativePath, string jsonBody, bool allowRetry = true)
         {
             Exception last = null;
-            for (int attempt = 1; attempt <= PostJsonMaxAttempts; attempt++)
+            int maxAttempts = allowRetry ? PostJsonMaxAttempts : 1;
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
                 try
                 {
@@ -302,7 +303,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 catch (Exception ex)
                 {
                     last = ex;
-                    Debug.WriteLine("[GameApi] PostJson retry " + attempt.ToString() + "/" + PostJsonMaxAttempts.ToString() + " summary=" + ex.Message);
+                    Debug.WriteLine("[GameApi] PostJson retry " + attempt.ToString() + "/" + maxAttempts.ToString() + " summary=" + ex.Message);
                     Debug.WriteLine("[GameApi] PostJson retry chain: " + FormatExceptionChainForLog(ex, 8));
                     if (ExceptionIndicatesHttpConflict(ex))
                     {

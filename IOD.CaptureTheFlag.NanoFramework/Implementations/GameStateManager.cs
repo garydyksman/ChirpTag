@@ -389,6 +389,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_peerLock)
             {
                 int n = _combatTargetCount < maxCount ? _combatTargetCount : maxCount;
+                if (n > dest.Length) n = dest.Length;
                 for (int i = 0; i < n; i++)
                 {
                     byte id = _combatTargetIds[i];
@@ -408,6 +409,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_peerLock)
             {
                 int n = _combatTargetCount < maxCount ? _combatTargetCount : maxCount;
+                if (n > dest.Length) n = dest.Length;
                 for (int i = 0; i < n; i++)
                     dest[i] = _combatTargetTypes[i];
 

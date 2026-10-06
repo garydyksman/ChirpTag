@@ -3,6 +3,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## First-time setup
+
+Both `ChirpTag/LocalConfig.cs` and `ChirpTagFlagNode/LocalConfig.cs` are gitignored because they hold device-specific secrets (WiFi SSID/password, API URL). Each project ships a `LocalConfig.template.cs` with the required constants stubbed out. Before building, copy the template to `LocalConfig.cs` in each project folder and fill in the values for your device.
+
 ## Build
 
 **Do not run `dotnet build`, `msbuild`, or any compile command on the `.nfproj` files** unless the user explicitly requests a build. Build and flash in Visual Studio using its nanoFramework extension. Use code review and static analysis to validate changes instead.

@@ -16,12 +16,15 @@ namespace ChirpTagFlagNode
             try
             {
                 Console.WriteLine("[FlagNodeWifi] Connecting WiFi...");
-                var cts = new CancellationTokenSource(30_000);
-                bool ok = WifiNetworkHelper.ConnectDhcp(
-                    LocalConfig.WIFI_SSID,
-                    LocalConfig.WIFI_PASSWORD,
-                    requiresDateTime: false,
-                    token: cts.Token);
+                bool ok;
+                using (var cts = new CancellationTokenSource(30_000))
+                {
+                    ok = WifiNetworkHelper.ConnectDhcp(
+                        LocalConfig.WIFI_SSID,
+                        LocalConfig.WIFI_PASSWORD,
+                        requiresDateTime: false,
+                        token: cts.Token);
+                }
 
                 if (ok)
                 {

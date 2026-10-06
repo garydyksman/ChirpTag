@@ -58,16 +58,19 @@ Player                Flag Node              Server
   |                       |                     |
   |--[Deliver]----------->|                     |
   |   data=[k0,k1,k2,k3]  |                     |
-  |                       |                     |
   |                       |--[HTTP POST]------->|
   |                       |   /deliver          |
   |                       |   {deviceId, key}   |
   |                       |<-[200 OK]-----------| (or 400 if wrong key)
   |                       |                     |
+  |<--[DeliverAck]--------|                     |
+  |   data=[accepted]     |                     |
+  |                       |                     |
 ```
 
 **Packets:**
 - **`Deliver`** (0x07) — 4-byte key `[k0, k1, k2, k3]` player is attempting to deliver
+- **`DeliverAck`** (0x0D) — 1-byte `accepted` (`1` = key accepted, `0` = rejected) sent back to player
 
 **Flag Node Actions:**
 1. Receive `Deliver` packet with key from player
@@ -75,9 +78,8 @@ Player                Flag Node              Server
 3. Call `ReportDeliver(deviceId, key)` via HTTP to server
 4. Server validates key and awards points if correct
 5. **Tear down WiFi, resume LoRa**
-6. Update display with result
-
-**No LoRa response packet** — the player doesn't get immediate feedback via LoRa. The server updates game state, and players see the result via their next HTTP poll or game state broadcast.
+6. Send `DeliverAck` back to player with acceptance result (1=accepted, 0=rejected)
+7. Update display with result
 
 ---
 
@@ -132,6 +134,7 @@ Player                Flag Node              Server
 | 0x05 | `Capture` | Player → Flag | Empty | Request key from flag |
 | 0x06 | `KeyGrant` | Flag → Player | 4 bytes (key) | Grant captured key |
 | 0x07 | `Deliver` | Player → Flag | 4 bytes (key) | Deliver captured key for scoring |
+| 0x0D | `DeliverAck` | Flag → Player | 1 byte (accepted) | Confirm key accepted (1) or rejected (0) |
 | 0x08 | `RespawnReq` | Player → Flag | Empty | Request respawn authorization |
 | 0x09 | `RespawnAck` | Flag → Player | 1 byte (score) | Grant respawn with new combat score |
 
