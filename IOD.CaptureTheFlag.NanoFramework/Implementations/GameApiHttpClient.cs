@@ -236,7 +236,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 var dto = (FlagKeyDto)JsonConvert.DeserializeObject(json, typeof(FlagKeyDto), JsonOptions);
                 if (dto == null || dto.Key == null || dto.Key.Length == 0)
                 {
-                    return new byte[4];
+                    return null;
                 }
 
                 return Convert.FromBase64String(dto.Key);
