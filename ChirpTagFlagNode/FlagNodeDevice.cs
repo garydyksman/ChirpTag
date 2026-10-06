@@ -26,7 +26,9 @@ namespace ChirpTagFlagNode
         private readonly System.Action _resumeLoRa;
         private readonly object _runningLock = new object();
         private readonly object _wifiLock = new object();
+        private readonly object _respawnLock = new object();
         private bool _txPaused;
+        private bool _respawnInFlight;
 
         private byte[] _key;
         private bool _keyReady;
@@ -318,26 +320,41 @@ namespace ChirpTagFlagNode
         public void OnRespawnRequestReceived(byte fromDeviceId)
         {
             Console.WriteLine($"[FlagNode] Respawn request from device 0x{fromDeviceId:X2}");
-            UpdateDisplay("RESPAWN", $"0x{fromDeviceId:X2}");
 
-            // Dispatch to background thread — FetchRespawnNumber calls PauseLoRa/WiFi/HTTP
-            // and must not block the LoRa callback thread.
+            lock (_respawnLock)
+            {
+                if (_respawnInFlight)
+                {
+                    Console.WriteLine($"[FlagNode] Respawn already in flight — dropping request from 0x{fromDeviceId:X2}");
+                    return;
+                }
+                _respawnInFlight = true;
+            }
+
+            UpdateDisplay("RESPAWN", $"0x{fromDeviceId:X2}");
             var job = new RespawnJob(this, fromDeviceId);
             new Thread(job.Run).Start();
         }
 
         internal void RespawnWorkerThreadImpl(byte fromDeviceId)
         {
-            byte newScore = FetchRespawnNumber(fromDeviceId);
-            if (newScore == 0)
+            try
             {
-                Console.WriteLine($"[FlagNode] Respawn fetch failed for 0x{fromDeviceId:X2} — not acking");
-                UpdateDisplay("RESPAWN", "Failed");
-                return;
+                byte newScore = FetchRespawnNumber(fromDeviceId);
+                if (newScore == 0)
+                {
+                    Console.WriteLine($"[FlagNode] Respawn fetch failed for 0x{fromDeviceId:X2} — not acking");
+                    UpdateDisplay("RESPAWN", "Failed");
+                    return;
+                }
+                Console.WriteLine($"[FlagNode] Respawn score for 0x{fromDeviceId:X2}: {newScore}");
+                SendRespawnAck(fromDeviceId, newScore);
+                UpdateDisplay("RESPAWN", "Ack sent");
             }
-            Console.WriteLine($"[FlagNode] Respawn score for 0x{fromDeviceId:X2}: {newScore}");
-            SendRespawnAck(fromDeviceId, newScore);
-            UpdateDisplay("RESPAWN", "Ack sent");
+            finally
+            {
+                lock (_respawnLock) { _respawnInFlight = false; }
+            }
         }
 
         // ---- LoRa TX ----
@@ -488,15 +505,16 @@ namespace ChirpTagFlagNode
             {
                 try
                 {
-                    bool paused;
-                    lock (_wifiLock) { paused = _txPaused; }
-                    if (!paused)
+                    lock (_wifiLock)
                     {
-                        byte[] packetBytes = _txQueue.Dequeue();
-                        if (packetBytes != null)
+                        if (!_txPaused)
                         {
-                            Console.WriteLine($"[FlagNode] Sending LoRa packet, length: {packetBytes.Length}");
-                            _lora.Send(packetBytes, timeoutMs: 5000);
+                            byte[] packetBytes = _txQueue.Dequeue();
+                            if (packetBytes != null)
+                            {
+                                Console.WriteLine($"[FlagNode] Sending LoRa packet, length: {packetBytes.Length}");
+                                _lora.Send(packetBytes, timeoutMs: 5000);
+                            }
                         }
                     }
                 }

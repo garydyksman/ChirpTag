@@ -84,6 +84,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private byte _combatTargetDeviceId = 0;
         private bool _deliverPending = false;
         private bool _deliverAckReceived = false;
+        private byte _pendingDeliverFlagNodeId = 0;
         private byte _currentGameId;
         private bool _displayPriorityPending = false;
         private byte _pendingCombatWinnerId;
@@ -883,6 +884,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
                 _deliverPending = true;
                 _deliverAckReceived = false;
+                _pendingDeliverFlagNodeId = flagNodeId;
                 QueuePacket(_builder.Deliver(DeviceId, flagNodeId, _state.CarriedKey));
                 _displayPriorityPending = true;
                 _display.ShowMessage("Delivering", "wait for flag");
@@ -929,6 +931,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (!_deliverPending)
             {
                 Log("OnDeliverAckReceived ignored - no deliver pending");
+                return;
+            }
+            if (fromFlagNodeId != _pendingDeliverFlagNodeId)
+            {
+                Log($"OnDeliverAckReceived ignored - sender 0x{fromFlagNodeId:X2} != expected 0x{_pendingDeliverFlagNodeId:X2}");
                 return;
             }
             _deliverAckReceived = true;
