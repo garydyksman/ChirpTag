@@ -27,6 +27,7 @@ namespace ChirpTagFlagNode
         private readonly object _runningLock = new object();
 
         private byte[] _key;
+        private bool _keyReady;
         private bool _keyTaken;
         private bool _isRunning;
         private byte _gameId;
@@ -78,6 +79,7 @@ namespace ChirpTagFlagNode
             _heartbeatBytes = _builder.Heartbeat(_flagNodeId, DeviceType).ToBytes();
 
             _key = new byte[4];
+            _keyReady = false;
             _keyTaken = false;
 
             // Wire up event handlers
@@ -180,15 +182,27 @@ namespace ChirpTagFlagNode
             try
             {
                 byte[] fetched = _httpClient.GetFlagKey(_flagNodeId);
-                _key = (fetched != null && fetched.Length > 0) ? fetched : new byte[4];
+                if (fetched != null && fetched.Length > 0)
+                {
+                    _key = fetched;
+                    _keyReady = true;
+                    Console.WriteLine("[FlagNode] Key fetched");
+                    UpdateDisplay("FLAG NODE", "Key ready");
+                }
+                else
+                {
+                    _key = new byte[4];
+                    _keyReady = false;
+                    Console.WriteLine("[FlagNode] Server returned empty key — capture disabled");
+                    UpdateDisplay("FLAG NODE", "No key yet");
+                }
                 _keyTaken = false;
-                Console.WriteLine("[FlagNode] Key fetched");
-                UpdateDisplay("FLAG NODE", "Key ready");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[FlagNode] FetchKey error: {ex.Message}");
                 _key = new byte[4];
+                _keyReady = false;
                 UpdateDisplay("FLAG NODE", "Key fetch failed");
             }
             finally
@@ -217,6 +231,13 @@ namespace ChirpTagFlagNode
         public void OnCaptureReceived(byte fromDeviceId)
         {
             Console.WriteLine($"[FlagNode] Capture request from device 0x{fromDeviceId:X2}");
+
+            if (!_keyReady)
+            {
+                Console.WriteLine("[FlagNode] Key not ready — capture ignored");
+                UpdateDisplay("CAPTURE", "No key!");
+                return;
+            }
 
             if (_keyTaken)
             {

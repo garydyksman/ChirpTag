@@ -16,8 +16,8 @@ using System.IO;
 // FOR GAME DEVICE (ChirpTag):
 string gameDeviceConfig = @"{
   ""playerName"": ""Jessica"",
-  ""wifiSsid"": ""Odido-062073"",
-  ""wifiPassword"": ""WLNYR58VQ5UGBUB5"",
+  ""wifiSsid"": ""YOUR_SSID"",
+  ""wifiPassword"": ""YOUR_PASSWORD"",
   ""gameApiBaseUrl"": ""https://YOUR-TUNNEL-HERE.euw.devtunnels.ms"",
   ""gameApiSslNoVerify"": true,
   ""allowHudWithoutValidDeviceId"": false,
@@ -27,8 +27,8 @@ string gameDeviceConfig = @"{
 // FOR FLAG NODE (ChirpTagFlagNode):
 string flagNodeConfig = @"{
   ""flagNodeId"": 16,
-  ""wifiSsid"": ""Odido-062073"",
-  ""wifiPassword"": ""WLNYR58VQ5UGBUB5"",
+  ""wifiSsid"": ""YOUR_SSID"",
+  ""wifiPassword"": ""YOUR_PASSWORD"",
   ""gameApiBaseUrl"": ""https://YOUR-TUNNEL-HERE.euw.devtunnels.ms"",
   ""gameApiSslNoVerify"": true
 }";
