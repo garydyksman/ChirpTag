@@ -48,6 +48,7 @@ namespace ChirpTagFlagNode
         private static FlagNodeDisplayManager s_displayManager;
         private static bool s_modeChangeRequested = false;
         private static readonly object s_modeLock = new object();
+        private static readonly object s_displayLock = new object();
 
         // Routes LoRa packets to whichever FlagNodeDevice is currently active.
         // Updated at the start of each game cycle.
@@ -203,6 +204,7 @@ namespace ChirpTagFlagNode
                         deviceId,
                         lora,
                         display,
+                        s_displayLock,
                         httpClient,
                         wifiBridge,
                         () => lora.StopPolling(),
@@ -214,7 +216,7 @@ namespace ChirpTagFlagNode
                     // OnGameStart fetches the key (WiFi on → fetch → WiFi off → LoRa start)
                     flagNode.OnGameStart();
 
-                    s_displayManager = new FlagNodeDisplayManager(display, DisplayMode.Rotating);
+                    s_displayManager = new FlagNodeDisplayManager(display, s_displayLock, DisplayMode.Rotating);
                     var stats = new FlagNodeStats
                     {
                         DeviceId = deviceId,
@@ -298,6 +300,8 @@ namespace ChirpTagFlagNode
 
                         if (stats.UptimeSeconds % 2 == 0)
                         {
+                            stats.CaptureCount = flagNode.CaptureCount;
+                            stats.DeliverCount = flagNode.DeliverCount;
                             s_displayManager.Render(stats);
                         }
                     }
@@ -324,10 +328,13 @@ namespace ChirpTagFlagNode
         {
             try
             {
-                display.ClearScreen();
-                display.DrawString(6, 6, line1, 1);
-                display.DrawString(6, 20, line2, 1);
-                display.Display();
+                lock (s_displayLock)
+                {
+                    display.ClearScreen();
+                    display.DrawString(6, 6, line1, 1);
+                    display.DrawString(6, 20, line2, 1);
+                    display.Display();
+                }
             }
             catch { }
         }

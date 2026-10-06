@@ -36,12 +36,14 @@ namespace ChirpTagFlagNode
     public class FlagNodeDisplayManager
     {
         private readonly Ssd1306 _display;
+        private readonly object _displayLock;
         private DisplayMode _mode;
         private int _rotatingCycle;
 
-        public FlagNodeDisplayManager(Ssd1306 display, DisplayMode initialMode = DisplayMode.Rotating)
+        public FlagNodeDisplayManager(Ssd1306 display, object displayLock, DisplayMode initialMode = DisplayMode.Rotating)
         {
             _display = display ?? throw new ArgumentNullException(nameof(display));
+            _displayLock = displayLock ?? throw new ArgumentNullException(nameof(displayLock));
             _mode = initialMode;
             _rotatingCycle = 0;
         }
@@ -65,33 +67,36 @@ namespace ChirpTagFlagNode
         /// </summary>
         public void Render(FlagNodeStats stats)
         {
-            _display.ClearScreen();
-
-            switch (_mode)
+            lock (_displayLock)
             {
-                case DisplayMode.Activity:
-                    RenderActivity(stats);
-                    break;
+                _display.ClearScreen();
 
-                case DisplayMode.Stats:
-                    RenderStats(stats);
-                    break;
-
-                case DisplayMode.Rotating:
-                    _rotatingCycle++;
-                    int subMode = (_rotatingCycle / 3) % 2;
-                    if (subMode == 0)
-                    {
+                switch (_mode)
+                {
+                    case DisplayMode.Activity:
                         RenderActivity(stats);
-                    }
-                    else
-                    {
-                        RenderStats(stats);
-                    }
-                    break;
-            }
+                        break;
 
-            _display.Display();
+                    case DisplayMode.Stats:
+                        RenderStats(stats);
+                        break;
+
+                    case DisplayMode.Rotating:
+                        _rotatingCycle++;
+                        int subMode = (_rotatingCycle / 3) % 2;
+                        if (subMode == 0)
+                        {
+                            RenderActivity(stats);
+                        }
+                        else
+                        {
+                            RenderStats(stats);
+                        }
+                        break;
+                }
+
+                _display.Display();
+            }
         }
 
         /// <summary>
@@ -99,15 +104,18 @@ namespace ChirpTagFlagNode
         /// </summary>
         public void ShowModeChange()
         {
-            _display.ClearScreen();
+            lock (_displayLock)
+            {
+                _display.ClearScreen();
 
-            string modeName;
-            if (_mode == DisplayMode.Activity) modeName = "ACTIVITY";
-            else if (_mode == DisplayMode.Stats) modeName = "STATS";
-            else modeName = "ROTATING";
+                string modeName;
+                if (_mode == DisplayMode.Activity) modeName = "ACTIVITY";
+                else if (_mode == DisplayMode.Stats) modeName = "STATS";
+                else modeName = "ROTATING";
 
-            _display.DrawString(6, 24, "MODE: " + modeName, 1);
-            _display.Display();
+                _display.DrawString(6, 24, "MODE: " + modeName, 1);
+                _display.Display();
+            }
         }
 
         private void RenderActivity(FlagNodeStats stats)

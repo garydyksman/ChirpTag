@@ -15,6 +15,7 @@ namespace ChirpTagFlagNode
         private readonly byte _flagNodeId;
         private readonly Sx1262 _lora;
         private readonly Ssd1306 _display;
+        private readonly object _displayLock;
         private readonly IPacketBuilder _builder;
         private readonly IMessageHandler _messageHandler;
         private readonly TxQueue _txQueue;
@@ -32,6 +33,8 @@ namespace ChirpTagFlagNode
         private byte _gameId;
         private byte _pendingGameEndWinnerId;
         private byte _pendingGameEndGameId;
+        private int _captureCount;
+        private int _deliverCount;
 
         private Thread _txThread;
         private Thread _heartbeatThread;
@@ -46,11 +49,14 @@ namespace ChirpTagFlagNode
         public byte[] Key => _key;
         public bool KeyTaken => _keyTaken;
         public bool IsRunning => _isRunning;
+        public int CaptureCount => _captureCount;
+        public int DeliverCount => _deliverCount;
 
         public FlagNodeDevice(
             byte flagNodeId,
             Sx1262 lora,
             Ssd1306 display,
+            object displayLock,
             IGameHttpClient httpClient,
             IWifiHttpBridge wifiHttpBridge,
             System.Action pauseLoRaForWifi,
@@ -60,6 +66,7 @@ namespace ChirpTagFlagNode
             _flagNodeId = flagNodeId;
             _lora = lora;
             _display = display;
+            _displayLock = displayLock ?? throw new ArgumentNullException(nameof(displayLock));
             _httpClient = httpClient;
             _wifiHttpBridge = wifiHttpBridge;
             _pauseLoRa = pauseLoRaForWifi;
@@ -196,6 +203,7 @@ namespace ChirpTagFlagNode
             SendKeyGrant(fromDeviceId);
 
             _keyTaken = true;
+            _captureCount++;
             UpdateDisplay("KEY CAPTURED", $"By: 0x{fromDeviceId:X2}");
         }
 
@@ -221,6 +229,7 @@ namespace ChirpTagFlagNode
             if (success)
             {
                 Console.WriteLine("[FlagNode] Delivery successful - sending DeliverAck + GameEnd");
+                _deliverCount++;
                 UpdateDisplay("DELIVER", "Success!");
             }
             else
@@ -461,10 +470,13 @@ namespace ChirpTagFlagNode
             try
             {
                 if (_display == null) return;
-                _display.ClearScreen();
-                _display.DrawString(4, 6, line1, 1);
-                _display.DrawString(4, 20, line2, 1);
-                _display.Display();
+                lock (_displayLock)
+                {
+                    _display.ClearScreen();
+                    _display.DrawString(4, 6, line1, 1);
+                    _display.DrawString(4, 20, line2, 1);
+                    _display.Display();
+                }
             }
             catch (Exception ex)
             {
