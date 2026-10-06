@@ -7,6 +7,9 @@
 ChirpTag/LocalConfig.cs
 ChirpTagFlagNode/LocalConfig.cs
 
+# Claude Code local settings (may contain tokens)
+.claude/settings.json
+
 # Local ax indexing and runtime state
 .ax/
 
