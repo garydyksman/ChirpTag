@@ -256,7 +256,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 var dto = (RespawnScoreDto)JsonConvert.DeserializeObject(json, typeof(RespawnScoreDto), JsonOptions);
                 if (dto == null)
                 {
-                    return (byte)((deviceId % 5) + 1);
+                    return 0;
                 }
 
                 return (byte)ClampByte(dto.CombatScore);
@@ -264,7 +264,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             catch (Exception ex)
             {
                 Debug.WriteLine("[GameApi] GetRespawnNumber: " + ex);
-                return (byte)((deviceId % 5) + 1);
+                return 0;
             }
         }
 

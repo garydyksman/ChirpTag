@@ -308,12 +308,15 @@ namespace ChirpTagFlagNode
             {
                 _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, fromDeviceId, _gameId).ToBytes());
                 // Retransmit GameEnd every 3 s for 30 s so devices that missed the first broadcast receive it
-                for (int i = 0; i < 10 && _isRunning; i++)
+                for (int i = 0; i < 10; i++)
                 {
                     Thread.Sleep(3_000);
                     Console.WriteLine($"[FlagNode] GameEnd retransmit {i + 1}/10");
                     _txQueue.Enqueue(_builder.GameEnd(_flagNodeId, fromDeviceId, _gameId).ToBytes());
                 }
+                // Game is definitively over — stop accepting new interactions
+                lock (_runningLock) { _isRunning = false; }
+                Console.WriteLine("[FlagNode] Game ended via delivery");
             }
         }
 

@@ -26,9 +26,9 @@
     <Compile Include="FlagNodeWifiHttpBridge.cs" />
     <Compile Include="FlagNodeSettings.cs" />
     <Compile Include="LocalConfig.cs" />
-    <None Include="PixelTextRenderer.cs" />
-    <None Include="Tiny5x7Font.cs" />
-    <None Include="SimpleOled.cs" />
+    <Compile Include="PixelTextRenderer.cs" />
+    <Compile Include="Tiny5x7Font.cs" />
+    <Compile Include="SimpleOled.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <ItemGroup>
