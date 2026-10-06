@@ -68,8 +68,17 @@ namespace ChirpTagFlagNode
                     catch
                     {
                     }
+
+                    try
+                    {
+                        a.Dispose();
+                    }
+                    catch
+                    {
+                    }
                 }
 
+                Thread.Sleep(300);
                 Console.WriteLine("[FlagNodeWifi] WiFi torn down");
             }
             catch (Exception ex)
