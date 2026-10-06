@@ -26,6 +26,7 @@ namespace ChirpTagFlagNode
         private readonly System.Action _resumeLoRa;
         private readonly object _runningLock = new object();
         private readonly object _wifiLock = new object();
+        private bool _txPaused;
 
         private byte[] _key;
         private bool _keyReady;
@@ -320,6 +321,12 @@ namespace ChirpTagFlagNode
         internal void RespawnWorkerThreadImpl(byte fromDeviceId)
         {
             byte newScore = FetchRespawnNumber(fromDeviceId);
+            if (newScore == 0)
+            {
+                Console.WriteLine($"[FlagNode] Respawn fetch failed for 0x{fromDeviceId:X2} — not acking");
+                UpdateDisplay("RESPAWN", "Failed");
+                return;
+            }
             Console.WriteLine($"[FlagNode] Respawn score for 0x{fromDeviceId:X2}: {newScore}");
             SendRespawnAck(fromDeviceId, newScore);
             UpdateDisplay("RESPAWN", "Ack sent");
@@ -357,7 +364,7 @@ namespace ChirpTagFlagNode
                 if (!EnableWiFi())
                 {
                     ResumeLoRa();
-                    return 5;
+                    return 0;
                 }
 
                 try
@@ -369,7 +376,7 @@ namespace ChirpTagFlagNode
                 catch (Exception ex)
                 {
                     Console.WriteLine($"[FlagNode] FetchRespawnNumber error: {ex.Message}");
-                    return 5;
+                    return 0;
                 }
                 finally
                 {
@@ -416,6 +423,7 @@ namespace ChirpTagFlagNode
         private void PauseLoRa()
         {
             Console.WriteLine("[FlagNode] Pausing LoRa for WiFi...");
+            lock (_wifiLock) { _txPaused = true; }
             if (_pauseLoRa != null)
             {
                 try { _pauseLoRa(); }
@@ -431,6 +439,7 @@ namespace ChirpTagFlagNode
                 try { _resumeLoRa(); }
                 catch (Exception ex) { Console.WriteLine($"[FlagNode] ResumeLoRa error: {ex.Message}"); }
             }
+            lock (_wifiLock) { _txPaused = false; }
         }
 
         private bool EnableWiFi()
@@ -471,11 +480,16 @@ namespace ChirpTagFlagNode
             {
                 try
                 {
-                    byte[] packetBytes = _txQueue.Dequeue();
-                    if (packetBytes != null)
+                    bool paused;
+                    lock (_wifiLock) { paused = _txPaused; }
+                    if (!paused)
                     {
-                        Console.WriteLine($"[FlagNode] Sending LoRa packet, length: {packetBytes.Length}");
-                        _lora.Send(packetBytes, timeoutMs: 5000);
+                        byte[] packetBytes = _txQueue.Dequeue();
+                        if (packetBytes != null)
+                        {
+                            Console.WriteLine($"[FlagNode] Sending LoRa packet, length: {packetBytes.Length}");
+                            _lora.Send(packetBytes, timeoutMs: 5000);
+                        }
                     }
                 }
                 catch (Exception ex)
