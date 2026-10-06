@@ -25,6 +25,7 @@ namespace ChirpTagFlagNode
         private readonly System.Action _pauseLoRa;
         private readonly System.Action _resumeLoRa;
         private readonly object _runningLock = new object();
+        private readonly object _wifiLock = new object();
 
         private byte[] _key;
         private bool _keyReady;
@@ -170,45 +171,48 @@ namespace ChirpTagFlagNode
             Console.WriteLine("[FlagNode] Fetching key from server...");
             UpdateDisplay("FLAG NODE", "Fetching key...");
 
-            PauseLoRa();
-            if (!EnableWiFi())
+            lock (_wifiLock)
             {
-                ResumeLoRa();
-                Console.WriteLine("[FlagNode] WiFi failed for key fetch; key unavailable until retry");
-                UpdateDisplay("FLAG NODE", "Key unavail");
-                return;
-            }
-
-            try
-            {
-                byte[] fetched = _httpClient.GetFlagKey(_flagNodeId);
-                if (fetched != null && fetched.Length > 0)
+                PauseLoRa();
+                if (!EnableWiFi())
                 {
-                    _key = fetched;
-                    _keyReady = true;
-                    Console.WriteLine("[FlagNode] Key fetched");
-                    UpdateDisplay("FLAG NODE", "Key ready");
+                    ResumeLoRa();
+                    Console.WriteLine("[FlagNode] WiFi failed for key fetch; key unavailable until retry");
+                    UpdateDisplay("FLAG NODE", "Key unavail");
+                    return;
                 }
-                else
+
+                try
                 {
+                    byte[] fetched = _httpClient.GetFlagKey(_flagNodeId);
+                    if (fetched != null && fetched.Length > 0)
+                    {
+                        _key = fetched;
+                        _keyReady = true;
+                        Console.WriteLine("[FlagNode] Key fetched");
+                        UpdateDisplay("FLAG NODE", "Key ready");
+                    }
+                    else
+                    {
+                        _key = new byte[4];
+                        _keyReady = false;
+                        Console.WriteLine("[FlagNode] Server returned empty key — capture disabled");
+                        UpdateDisplay("FLAG NODE", "No key yet");
+                    }
+                    _keyTaken = false;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FlagNode] FetchKey error: {ex.Message}");
                     _key = new byte[4];
                     _keyReady = false;
-                    Console.WriteLine("[FlagNode] Server returned empty key — capture disabled");
-                    UpdateDisplay("FLAG NODE", "No key yet");
+                    UpdateDisplay("FLAG NODE", "Key fetch failed");
                 }
-                _keyTaken = false;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[FlagNode] FetchKey error: {ex.Message}");
-                _key = new byte[4];
-                _keyReady = false;
-                UpdateDisplay("FLAG NODE", "Key fetch failed");
-            }
-            finally
-            {
-                TearDownWiFi();
-                ResumeLoRa();
+                finally
+                {
+                    TearDownWiFi();
+                    ResumeLoRa();
+                }
             }
         }
 
@@ -347,28 +351,31 @@ namespace ChirpTagFlagNode
         {
             Console.WriteLine($"[FlagNode] FetchRespawnNumber for device 0x{deviceId:X2}");
 
-            PauseLoRa();
-            if (!EnableWiFi())
+            lock (_wifiLock)
             {
-                ResumeLoRa();
-                return 5;
-            }
+                PauseLoRa();
+                if (!EnableWiFi())
+                {
+                    ResumeLoRa();
+                    return 5;
+                }
 
-            try
-            {
-                byte score = _httpClient.GetRespawnNumber(deviceId);
-                Console.WriteLine($"[FlagNode] Respawn score fetched: {score}");
-                return score;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[FlagNode] FetchRespawnNumber error: {ex.Message}");
-                return 5;
-            }
-            finally
-            {
-                TearDownWiFi();
-                ResumeLoRa();
+                try
+                {
+                    byte score = _httpClient.GetRespawnNumber(deviceId);
+                    Console.WriteLine($"[FlagNode] Respawn score fetched: {score}");
+                    return score;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FlagNode] FetchRespawnNumber error: {ex.Message}");
+                    return 5;
+                }
+                finally
+                {
+                    TearDownWiFi();
+                    ResumeLoRa();
+                }
             }
         }
 
@@ -376,28 +383,31 @@ namespace ChirpTagFlagNode
         {
             Console.WriteLine($"[FlagNode] ReportDeliver device 0x{deviceId:X2}, key: [{key.Length}b]");
 
-            PauseLoRa();
-            if (!EnableWiFi())
+            lock (_wifiLock)
             {
-                ResumeLoRa();
-                return false;
-            }
+                PauseLoRa();
+                if (!EnableWiFi())
+                {
+                    ResumeLoRa();
+                    return false;
+                }
 
-            try
-            {
-                bool accepted = _httpClient.ReportDeliver(deviceId, key);
-                Console.WriteLine($"[FlagNode] Deliver reported, accepted={accepted}");
-                return accepted;
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[FlagNode] ReportDeliver error: {ex.Message}");
-                return false;
-            }
-            finally
-            {
-                TearDownWiFi();
-                ResumeLoRa();
+                try
+                {
+                    bool accepted = _httpClient.ReportDeliver(deviceId, key);
+                    Console.WriteLine($"[FlagNode] Deliver reported, accepted={accepted}");
+                    return accepted;
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[FlagNode] ReportDeliver error: {ex.Message}");
+                    return false;
+                }
+                finally
+                {
+                    TearDownWiFi();
+                    ResumeLoRa();
+                }
             }
         }
 
