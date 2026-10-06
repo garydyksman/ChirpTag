@@ -151,7 +151,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 }
 
                 string jsonBody = JsonSerializer.SerializeObject(body);
-                string json = PostJson("/api/game/register/player", jsonBody);
+                string json = PostJson("/api/game/register/player", jsonBody, allowRetry: false);
                 var dto = (PlayerSetupDto)JsonConvert.DeserializeObject(json, typeof(PlayerSetupDto), JsonOptions);
                 if (dto == null)
                 {
@@ -175,7 +175,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 var body = new Hashtable();
                 body.Add("macAddress", macAddress != null ? macAddress : string.Empty);
                 string jsonBody = JsonSerializer.SerializeObject(body);
-                string json = PostJson("/api/game/register/flagnode", jsonBody);
+                string json = PostJson("/api/game/register/flagnode", jsonBody, allowRetry: false);
                 var dto = (PlayerSetupDto)JsonConvert.DeserializeObject(json, typeof(PlayerSetupDto), JsonOptions);
                 if (dto == null)
                 {

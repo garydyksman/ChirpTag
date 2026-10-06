@@ -245,6 +245,7 @@ namespace ChirpTagFlagNode
 
         public void OnCaptureReceived(byte fromDeviceId)
         {
+            lock (_runningLock) { if (!_isRunning) return; }
             Console.WriteLine($"[FlagNode] Capture request from device 0x{fromDeviceId:X2}");
 
             if (!_keyReady)
@@ -276,6 +277,7 @@ namespace ChirpTagFlagNode
 
         public void OnDeliverReceived(byte fromDeviceId, byte[] key)
         {
+            lock (_runningLock) { if (!_isRunning) return; }
             Console.WriteLine($"[FlagNode] Deliver from device 0x{fromDeviceId:X2}");
             UpdateDisplay("DELIVER", $"From: 0x{fromDeviceId:X2}");
 
@@ -322,6 +324,7 @@ namespace ChirpTagFlagNode
 
         public void OnRespawnRequestReceived(byte fromDeviceId)
         {
+            lock (_runningLock) { if (!_isRunning) return; }
             Console.WriteLine($"[FlagNode] Respawn request from device 0x{fromDeviceId:X2}");
 
             lock (_respawnLock)
@@ -448,7 +451,7 @@ namespace ChirpTagFlagNode
 
         // ---- WiFi/LoRa Coordination ----
 
-        private void PauseLoRa()
+        internal void PauseLoRa()
         {
             Console.WriteLine("[FlagNode] Pausing LoRa for WiFi...");
             lock (_wifiLock) { _txPaused = true; }
@@ -459,7 +462,7 @@ namespace ChirpTagFlagNode
             }
         }
 
-        private void ResumeLoRa()
+        internal void ResumeLoRa()
         {
             Console.WriteLine("[FlagNode] Resuming LoRa...");
             if (_resumeLoRa != null)

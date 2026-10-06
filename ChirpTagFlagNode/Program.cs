@@ -258,7 +258,7 @@ namespace ChirpTagFlagNode
                         {
                             gameEndCheckCounter = 0;
                             Console.WriteLine("[GAME-END] Checking server...");
-                            lora.StopPolling();
+                            flagNode.PauseLoRa();
                             WifiHttpBootOutcome endWifi = wifiBridge.EnableForHttp();
                             if (endWifi == WifiHttpBootOutcome.Connected)
                             {
@@ -269,26 +269,25 @@ namespace ChirpTagFlagNode
                                     {
                                         Console.WriteLine("[GAME-END] Server: game ended. Winner: " + endInfo.WinnerId);
                                         wifiBridge.TearDownRadio();
-                                        lora.StartPolling();
-                                        // Route through TxQueue/TxLoop — avoids direct Send() racing the poll thread on the SPI bus
+                                        flagNode.ResumeLoRa();
                                         flagNode.OnGameEnd(endInfo.WinnerId, endInfo.GameId);
                                     }
                                     else
                                     {
                                         wifiBridge.TearDownRadio();
-                                        lora.StartPolling();
+                                        flagNode.ResumeLoRa();
                                     }
                                 }
                                 catch (Exception pollEx)
                                 {
                                     Console.WriteLine("[GAME-END] Poll error: " + pollEx.Message);
                                     wifiBridge.TearDownRadio();
-                                    lora.StartPolling();
+                                    flagNode.ResumeLoRa();
                                 }
                             }
                             else
                             {
-                                lora.StartPolling();
+                                flagNode.ResumeLoRa();
                             }
                         }
 
