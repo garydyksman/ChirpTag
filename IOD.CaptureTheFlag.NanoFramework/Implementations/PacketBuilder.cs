@@ -7,8 +7,8 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
     {
         private static readonly byte[] EmptyData = new byte[0];
 
-        public IPacket Heartbeat(byte deviceId)
-            => new Packet(deviceId, PacketType.Heartbeat, 0x00, EmptyData);
+        public IPacket Heartbeat(byte deviceId, byte deviceType)
+            => new Packet(deviceId, PacketType.Heartbeat, 0x00, new byte[] { deviceType });
 
         public IPacket Attack(byte deviceId, byte targetId)
             => new Packet(deviceId, PacketType.Attack, targetId, EmptyData);
@@ -40,7 +40,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public IPacket GameStart(byte gmNodeId)
             => new Packet(gmNodeId, PacketType.GameStart, 0x00, EmptyData);
 
-        public IPacket GameEnd(byte gmNodeId, byte winnerId)
-            => new Packet(gmNodeId, PacketType.GameEnd, 0x00, new byte[] { winnerId });
+        public IPacket GameEnd(byte gmNodeId, byte winnerId, byte gameId)
+            => new Packet(gmNodeId, PacketType.GameEnd, 0x00, new byte[] { winnerId, gameId });
+
+        public IPacket DeliverAck(byte flagNodeId, byte targetDeviceId, bool accepted)
+            => new Packet(flagNodeId, PacketType.DeliverAck, targetDeviceId, new byte[] { accepted ? (byte)1 : (byte)0 });
     }
 }

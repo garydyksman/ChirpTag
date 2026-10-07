@@ -3,6 +3,7 @@
     public class HudData
     {
         public string PlayerName { get; set; }
+        public string TeamName { get; set; }
         public byte Lives { get; set; }
         public bool HasFlag { get; set; }
         public byte CombatScore { get; set; }

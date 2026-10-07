@@ -15,13 +15,20 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         private const int DeviceLostTimeoutCycles = 15;
         private const int MaxDeviceId = 256;
         private const int MaxPlayers = 16;
+        private const int UnknownRssiDbm = -200;
+        /// <summary>Peers at or below this RSSI (once measured) are omitted from the combat target list.</summary>
+        private const int WeakLinkHideFromCombatListDbm = -105;
 
         // ---------------------------------------------------------------
         // Player list — from HTTP server, permanent for game duration
         // _playerNames[deviceId] = name, null if not registered
+        // _peerTeams[deviceId] = team name, null if not assigned
         // ---------------------------------------------------------------
 
         private readonly string[] _playerNames = new string[MaxDeviceId];
+        private readonly string[] _peerTeams = new string[MaxDeviceId];
+        private readonly byte[] _peerDeviceTypes = new byte[MaxDeviceId];
+        private string _myTeam;
 
         // ---------------------------------------------------------------
         // Presence — _lastSeen[deviceId] = refresh cycle of last heartbeat RX
@@ -29,7 +36,11 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // ---------------------------------------------------------------
 
         private readonly int[] _lastSeen = new int[MaxDeviceId];
+        private readonly int[] _peerLastRssi = new int[MaxDeviceId];
         private int _presenceCycle = 1;
+
+        /// <summary>When <c>true</c>, weak-RSSI peers are still included in the combat list (see <see cref="WeakLinkHideFromCombatListDbm"/>).</summary>
+        private readonly bool _ignoreAttackRangeLimit;
 
         // ---------------------------------------------------------------
         // Thread safety — LoRa poll thread writes, heartbeat thread reads
@@ -45,6 +56,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         private readonly string[] _combatTargets = new string[MaxPlayers];
         private readonly byte[] _combatTargetIds = new byte[MaxPlayers];
+        private readonly byte[] _combatTargetTypes = new byte[MaxPlayers];
         private readonly HudData _hudData = new HudData();
 
         private int _combatTargetCount = 0;
@@ -56,7 +68,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public byte DeviceId { get; }
         public string PlayerName { get; }
-        public GameState State { get; private set; }
+        public PlayerState State { get; private set; }
         public byte Lives { get; private set; }
         public bool HasFlag { get; private set; }
         public byte[] CarriedKey { get; private set; }
@@ -65,13 +77,19 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public string Timer { get; private set; }
         public int SelectedIndex => _selectedIndex;
 
-        public GameStateManager(byte deviceId, string playerName)
+        public GameStateManager(byte deviceId, string playerName, bool ignoreAttackRangeLimit = false)
         {
             DeviceId = deviceId;
             PlayerName = playerName;
+            _ignoreAttackRangeLimit = ignoreAttackRangeLimit;
             Lives = 1;
-            State = GameState.Idle;
+            State = PlayerState.Idle;
             Timer = "00:00";
+            for (int i = 0; i < MaxDeviceId; i++)
+            {
+                _peerLastRssi[i] = UnknownRssiDbm;
+                _peerDeviceTypes[i] = DeviceType.Player;
+            }
             Log($"ctor deviceId=0x{DeviceId:X2} player={PlayerName} lives={Lives} state={State}");
         }
 
@@ -82,6 +100,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         public void ApplyPlayerList(PlayerInfo[] players)
         {
             Log($"ApplyPlayerList begin count={(players == null ? 0 : players.Length)}");
+            int httpPeerRows = 0;
             foreach (PlayerInfo player in players)
             {
                 Log($"ApplyPlayerList player id=0x{player.DeviceId:X2} name={player.Name} team={player.Team} score={player.CombatScore} enemyFlag=0x{player.EnemyFlagId:X2}");
@@ -89,22 +108,31 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 {
                     CombatScore = player.CombatScore;
                     EnemyFlagId = player.EnemyFlagId;
-                    Log($"ApplyPlayerList self score={CombatScore} enemyFlag=0x{EnemyFlagId:X2}");
+                    _myTeam = string.IsNullOrEmpty(player.Team) ? null : player.Team;
+                    Log($"ApplyPlayerList self score={CombatScore} enemyFlag=0x{EnemyFlagId:X2} myTeam={(_myTeam ?? "(null)")}");
                 }
                 else
                 {
-                    _playerNames[player.DeviceId] = player.Name;
-                    Log($"ApplyPlayerList stored peer id=0x{player.DeviceId:X2} name={player.Name}");
+                    // Empty names from JSON deserialize as ""; treat like unknown so HUD uses 0xNN fallback.
+                    _playerNames[player.DeviceId] = string.IsNullOrEmpty(player.Name) ? null : player.Name;
+                    _peerTeams[player.DeviceId] = string.IsNullOrEmpty(player.Team) ? null : player.Team;
+                    httpPeerRows++;
+                    Log($"ApplyPlayerList stored peer id=0x{player.DeviceId:X2} name={(_playerNames[player.DeviceId] ?? "(null)")} team={(_peerTeams[player.DeviceId] ?? "(null)")}");
                 }
             }
             Log("ApplyPlayerList end");
+            if (CombatListDiagnostics.Enabled)
+            {
+                CombatListDiagnostics.Write(
+                    "HTTP roster applied: self=0x" + DeviceId.ToString("X2") + " httpPeerRows=" + httpPeerRows.ToString() + " (names for LoRa ids; list rows still need heartbeat presence)");
+            }
         }
 
         // ---------------------------------------------------------------
         // State mutations
         // ---------------------------------------------------------------
 
-        public void SetState(GameState state)
+        public void SetState(PlayerState state)
         {
             Log($"SetState {State} -> {state}");
             State = state;
@@ -120,7 +148,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             Log($"TakeDamage begin lives={Lives} state={State}");
             if (Lives > 0) Lives--;
-            State = Lives == 0 ? GameState.Dead : GameState.Stunned;
+            State = Lives == 0 ? PlayerState.Dead : PlayerState.Stunned;
             Log($"TakeDamage end lives={Lives} state={State}");
         }
 
@@ -128,7 +156,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         {
             Log($"Respawn begin oldScore={CombatScore} newScore={newCombatScore} state={State}");
             CombatScore = newCombatScore;
-            State = GameState.Active;
+            State = PlayerState.Active;
             Log($"Respawn end score={CombatScore} state={State}");
         }
 
@@ -152,11 +180,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
         // UpdatePeer — called on every heartbeat RX (LoRa poll thread)
         // ---------------------------------------------------------------
 
-        public void UpdatePeer(byte deviceId, string playerName, int rssi, float snr)
+        public void UpdatePeer(byte deviceId, string playerName, byte deviceType, int rssi, float snr)
         {
             Log($"UpdatePeer begin device=0x{deviceId:X2} playerName={playerName} rssi={rssi} snr={snr}");
+            if (CombatListDiagnostics.Enabled)
+            {
+                CombatListDiagnostics.Write(
+                    "LoRa presence UpdatePeer id=0x" + deviceId.ToString("X2") + " rssi=" + rssi.ToString() + " rosterName=" + (_playerNames[deviceId] ?? "(null)"));
+            }
+
             // Accept name from heartbeat only if server didn't give us one
-            if (_playerNames[deviceId] == null && playerName != null)
+            if (_playerNames[deviceId] == null && !string.IsNullOrEmpty(playerName))
             {
                 _playerNames[deviceId] = playerName;
                 Log($"UpdatePeer accepted heartbeat name={playerName}");
@@ -165,7 +199,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_peerLock)
             {
                 _lastSeen[deviceId] = _presenceCycle;
-                Log($"UpdatePeer lastSeen=0x{deviceId:X2} cycle={_lastSeen[deviceId]}");
+                _peerLastRssi[deviceId] = rssi;
+                _peerDeviceTypes[deviceId] = NormalizeDeviceType(deviceType);
+                Log($"UpdatePeer lastSeen=0x{deviceId:X2} cycle={_lastSeen[deviceId]} rssi={rssi}");
             }
             Log("UpdatePeer end");
         }
@@ -176,6 +212,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             lock (_peerLock)
             {
                 _lastSeen[deviceId] = 0;
+                _peerLastRssi[deviceId] = UnknownRssiDbm;
             }
             Log("RemovePeer end");
         }
@@ -191,6 +228,31 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             _presenceCycle++;
             if (_presenceCycle == int.MaxValue)
                 _presenceCycle = 1;
+
+            if (State == PlayerState.Dead)
+            {
+                lock (_peerLock)
+                {
+                    for (int j = 0; j < _combatTargetCount; j++)
+                    {
+                        _combatTargets[j] = null;
+                        _combatTargetIds[j] = 0;
+                        _combatTargetTypes[j] = DeviceType.Player;
+                    }
+
+                    _combatTargetCount = 0;
+                    _selectedIndex = 0;
+                }
+
+                Log("RefreshCombatList end state=Dead count=0");
+                if (CombatListDiagnostics.Enabled)
+                {
+                    CombatListDiagnostics.Write("Refresh state=Dead targetCount=0 (combat list cleared)");
+                }
+
+                return;
+            }
+
             int i = 0;
 
             lock (_peerLock)
@@ -206,13 +268,32 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                         // Timed out — reset presence, keep name
                         Log($"RefreshCombatList peer timeout id=0x{id:X2} lastSeen={_lastSeen[id]} cycle={_presenceCycle}");
                         _lastSeen[id] = 0;
+                        _peerLastRssi[id] = UnknownRssiDbm;
+                        continue;
+                    }
+
+                    int rssi = _peerLastRssi[id];
+                    if (!_ignoreAttackRangeLimit && rssi != UnknownRssiDbm && rssi <= WeakLinkHideFromCombatListDbm)
+                    {
+                        Log($"RefreshCombatList skip weak signal id=0x{id:X2} rssi={rssi}");
+                        continue;
+                    }
+
+                    // Skip teammates (but keep flag nodes and players without teams)
+                    if (_peerDeviceTypes[id] == DeviceType.Player
+                        && !string.IsNullOrEmpty(_myTeam)
+                        && !string.IsNullOrEmpty(_peerTeams[id])
+                        && _peerTeams[id] == _myTeam)
+                    {
+                        Log($"RefreshCombatList skip teammate id=0x{id:X2} team={_peerTeams[id]}");
                         continue;
                     }
 
                     // Store both name and deviceId at same index
-                    _combatTargets[i] = _playerNames[id] ?? $"0x{id:X2}";
+                    _combatTargets[i] = DisplayNameForPeer((byte)id);
                     _combatTargetIds[i] = (byte)id;
-                    Log($"RefreshCombatList target index={i} id=0x{id:X2} name={_combatTargets[i]}");
+                    _combatTargetTypes[i] = _peerDeviceTypes[id];
+                    Log($"RefreshCombatList target index={i} id=0x{id:X2} name={_combatTargets[i]} team={(_peerTeams[id] ?? "(null)")}");
                     i++;
                 }
 
@@ -222,6 +303,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                     Log($"RefreshCombatList clear stale index={j}");
                     _combatTargets[j] = null;
                     _combatTargetIds[j] = 0;
+                    _combatTargetTypes[j] = DeviceType.Player;
                 }
 
                 _combatTargetCount = i;
@@ -234,6 +316,58 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 _selectedIndex = 0;
             }
             Log($"RefreshCombatList end count={_combatTargetCount} selected={_selectedIndex}");
+            TraceCombatRefreshSummary();
+        }
+
+        private void TraceCombatRefreshSummary()
+        {
+            if (!CombatListDiagnostics.Enabled)
+            {
+                return;
+            }
+
+            CombatListDiagnostics.Write(
+                "Refresh state=" + State.ToString() + " targetCount=" + _combatTargetCount.ToString() + " selected=" + _selectedIndex.ToString() + " presenceCycle=" + _presenceCycle.ToString());
+
+            lock (_peerLock)
+            {
+                for (int k = 0; k < _combatTargetCount && k < MaxPlayers; k++)
+                {
+                    byte id = _combatTargetIds[k];
+                    int rssi = _peerLastRssi[id];
+                    string label = _combatTargets[k] ?? "";
+                    CombatListDiagnostics.Write(
+                        "  row[" + k.ToString() + "] id=0x" + id.ToString("X2") + " rssi=" + rssi.ToString() + " label=" + label);
+                }
+
+                if (_combatTargetCount == 0)
+                {
+                    int heard = 0;
+                    int weak = 0;
+                    for (int id = 0; id < MaxDeviceId; id++)
+                    {
+                        if (id == DeviceId)
+                        {
+                            continue;
+                        }
+
+                        if (_lastSeen[id] == 0)
+                        {
+                            continue;
+                        }
+
+                        heard++;
+                        int r = _peerLastRssi[id];
+                        if (r != UnknownRssiDbm && r <= WeakLinkHideFromCombatListDbm)
+                        {
+                            weak++;
+                        }
+                    }
+
+                    CombatListDiagnostics.Write(
+                        "  no rows: LoRa ids with presence=" + heard.ToString() + " of those weakRssiSkip<=" + WeakLinkHideFromCombatListDbm.ToString() + " =" + weak.ToString());
+                }
+            }
         }
 
         // ---------------------------------------------------------------
@@ -245,6 +379,43 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             count = _combatTargetCount;
             Log($"GetCombatTargets count={count}");
             return _combatTargets;
+        }
+
+        public void CopyCombatTargetRssi(int[] dest, int maxCount)
+        {
+            if (dest == null || maxCount <= 0)
+                return;
+
+            lock (_peerLock)
+            {
+                int n = _combatTargetCount < maxCount ? _combatTargetCount : maxCount;
+                if (n > dest.Length) n = dest.Length;
+                for (int i = 0; i < n; i++)
+                {
+                    byte id = _combatTargetIds[i];
+                    dest[i] = _peerLastRssi[id];
+                }
+
+                for (int i = n; i < maxCount && i < dest.Length; i++)
+                    dest[i] = UnknownRssiDbm;
+            }
+        }
+
+        public void CopyCombatTargetTypes(byte[] dest, int maxCount)
+        {
+            if (dest == null || maxCount <= 0)
+                return;
+
+            lock (_peerLock)
+            {
+                int n = _combatTargetCount < maxCount ? _combatTargetCount : maxCount;
+                if (n > dest.Length) n = dest.Length;
+                for (int i = 0; i < n; i++)
+                    dest[i] = _combatTargetTypes[i];
+
+                for (int i = n; i < maxCount && i < dest.Length; i++)
+                    dest[i] = DeviceType.Player;
+            }
         }
 
         // ---------------------------------------------------------------
@@ -264,8 +435,10 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
                 result[i] = new PeerInfo
                 {
                     DeviceId = deviceId,
+                    DeviceType = _combatTargetTypes[i],
                     PlayerName = _combatTargets[i],
-                    LastSeenAt = _lastSeen[deviceId]
+                    LastSeenAt = _lastSeen[deviceId],
+                    Rssi = _peerLastRssi[deviceId]
                 };
             }
 
@@ -289,15 +462,38 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             return new PeerInfo
             {
                 DeviceId = deviceId,
+                DeviceType = _combatTargetTypes[_selectedIndex],
                 PlayerName = _combatTargets[_selectedIndex],
-                LastSeenAt = _lastSeen[deviceId]
+                LastSeenAt = _lastSeen[deviceId],
+                Rssi = _peerLastRssi[deviceId]
             };
         }
 
         public string GetPlayerName(byte deviceId)
         {
+            return DisplayNameForPeer(deviceId);
+        }
+
+        /// <summary>Roster name if present and non-empty; otherwise a stable hex label for the device.</summary>
+        private string DisplayNameForPeer(byte deviceId)
+        {
+            if (_peerDeviceTypes[deviceId] == DeviceType.FlagNode)
+            {
+                if (EnemyFlagId != 0)
+                    return deviceId == EnemyFlagId ? "ENEMY FLAG" : "OWN FLAG";
+                // Fallback: compare teams from HTTP roster (works when server doesn't return enemyFlagId)
+                if (!string.IsNullOrEmpty(_myTeam) && !string.IsNullOrEmpty(_peerTeams[deviceId]))
+                    return _peerTeams[deviceId] == _myTeam ? "OWN FLAG" : "ENEMY FLAG";
+                return "Flag 0x" + deviceId.ToString("X2");
+            }
+
             string name = _playerNames[deviceId];
-            return name ?? $"0x{deviceId:X2}";
+            return string.IsNullOrEmpty(name) ? $"0x{deviceId:X2}" : name;
+        }
+
+        private static byte NormalizeDeviceType(byte deviceType)
+        {
+            return deviceType == DeviceType.FlagNode ? DeviceType.FlagNode : DeviceType.Player;
         }
 
         // ---------------------------------------------------------------
@@ -318,7 +514,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 
         public HudData ToHudData()
         {
-            Log($"ToHudData lives={Lives} hasFlag={HasFlag} score={CombatScore} timer={Timer}");
+            Log($"ToHudData lives={Lives} hasFlag={HasFlag} score={CombatScore} timer={Timer} team={(_myTeam ?? "(null)")}");
+            _hudData.PlayerName = PlayerName;
+            _hudData.TeamName = _myTeam;
             _hudData.Lives = Lives;
             _hudData.HasFlag = HasFlag;
             _hudData.CombatScore = CombatScore;

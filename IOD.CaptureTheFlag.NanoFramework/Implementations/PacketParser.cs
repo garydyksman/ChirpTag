@@ -23,18 +23,19 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
             if (VerboseLogging) Log("ExpectedLength");
             switch (msgType)
             {
-                case PacketType.Heartbeat: return 4;  // header + crc
+                case PacketType.Heartbeat: return 5;  // + deviceType
                 case PacketType.Attack: return 4;
                 case PacketType.Capture: return 4;
                 case PacketType.RespawnReq: return 4;
                 case PacketType.GameStart: return 4;
                 case PacketType.AttackAck: return 5;  // + combatNumber
                 case PacketType.RespawnAck: return 5;  // + newCombatNumber
-                case PacketType.GameEnd: return 5;  // + winnerId
+                case PacketType.GameEnd: return 6;  // + winnerId + gameId
                 case PacketType.FlagTransfer: return 8;  // + k0-k3
                 case PacketType.KeyGrant: return 8;
                 case PacketType.Deliver: return 8;
                 case PacketType.CombatResult: return 5; // header(3) + winnerId(1) + crc(1)
+                case PacketType.DeliverAck: return 5;  // + accepted byte
                 default: return -1; // unknown type
             }
         }

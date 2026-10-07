@@ -1,0 +1,15 @@
+{
+  "servers": {
+    "ax": {
+      "args": [
+        "serve",
+        "--mcp",
+        "--path",
+        "${workspaceFolder}"
+      ],
+      "command": "C:\\Users\\gary.dyksman\\AppData\\Local\\ax\\current\\bin\\ax.exe",
+      "cwd": "${workspaceFolder}",
+      "type": "stdio"
+    }
+  }
+}

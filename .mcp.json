@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "ax": {
+      "args": [
+        "serve",
+        "--mcp",
+        "--path",
+        "${CLAUDE_PROJECT_DIR:-.}"
+      ],
+      "command": "C:\\Users\\gary.dyksman\\AppData\\Local\\ax\\current\\bin\\ax.exe",
+      "cwd": "${CLAUDE_PROJECT_DIR:-.}"
+    }
+  }
+}

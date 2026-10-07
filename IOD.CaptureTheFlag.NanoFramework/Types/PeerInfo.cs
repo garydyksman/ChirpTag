@@ -3,6 +3,7 @@
     public class PeerInfo
     {
         public byte DeviceId { get; set; }
+        public byte DeviceType { get; set; }
         public string PlayerName { get; set; }
         public int Rssi { get; set; }
         public float Snr { get; set; }

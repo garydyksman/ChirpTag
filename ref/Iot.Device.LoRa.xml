@@ -1,0 +1,223 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>Iot.Device.LoRa</name>
+    </assembly>
+    <members>
+        <member name="T:Iot.Device.LoRa.Drivers.Sx1262.Sx1262">
+            <summary>
+            <para>Low-level SX1262 LoRa radio driver.</para>
+            <para>Heltec Vision Master E213 (HT-VME213) default pin mapping: NSS = 8, SCK = 9, MOSI = 10, MISO = 11, RST = 12, BUSY = 13, DIO1 = 14.</para>
+            <para>Supports reset, initialization, TX, RX polling, and buffer access.</para>
+            </summary>
+        </member>
+        <member name="F:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.MaxPayloadLength">
+            <summary>
+            Maximum TX/RX payload length supported by this driver (matches the SX1262 length field in this configuration).
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.DecodeChipMode(System.Byte)">
+            <summary>
+            Decodes chip mode bits [6:4] from a raw status byte.
+            </summary>
+            <param name="status">The status byte returned by the chip.</param>
+            <returns>A short label describing the chip mode.</returns>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.#ctor(System.Device.Spi.SpiDevice,System.Int32,System.Int32,System.Int32,System.Device.Gpio.GpioController,System.Boolean,System.Boolean)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Iot.Device.LoRa.Drivers.Sx1262.Sx1262" /> class.
+            </summary>
+            <param name="spiDevice">The SPI device for the radio.</param>
+            <param name="resetPin">GPIO pin number for reset (active low).</param>
+            <param name="busyPin">GPIO pin number for the BUSY line.</param>
+            <param name="dio1Pin">GPIO pin number for DIO1 (IRQ).</param>
+            <param name="gpioController">Optional shared GPIO controller; a new instance is created when null.</param>
+            <param name="shouldDispose">True to dispose the GPIO controller when this instance is disposed.</param>
+            <param name="disposeSpi">True to dispose <paramref name="spiDevice" /> when this instance is disposed (use false when the bus is shared).</param>
+        </member>
+        <member name="E:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.PacketReceived">
+            <inheritdoc/>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.Reset">
+            <inheritdoc/>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.WaitBusy(System.Int32)">
+            <summary>
+            Blocks until BUSY goes low or the timeout expires.
+            </summary>
+            <param name="timeoutMs">Maximum time to wait, in milliseconds.</param>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.GetStatus">
+            <summary>
+            Reads the chip status byte.
+            </summary>
+            <returns>The second byte of the status SPI transaction.</returns>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.Initialize">
+            <inheritdoc/>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.SetRfFrequency(System.UInt32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.StartReceiving">
+            <summary>
+            Puts the chip into continuous RX mode (timeout = 0xFFFFFF).
+            </summary>
+            <remarks>Called automatically by <see cref="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.StartPolling" /> and after transmit.</remarks>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.Send(System.Byte[],System.Int32)">
+            <inheritdoc/>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.WriteBuffer(System.Byte,System.Byte[])">
+            <summary>
+            Writes bytes into the SX1262 data buffer at the given offset.
+            </summary>
+            <param name="offset">Start offset in the chip buffer.</param>
+            <param name="data">Payload bytes to write.</param>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.GetRxBufferStatus(System.Byte@,System.Byte@)">
+            <summary>
+            Gets the RX buffer status after RxDone fires on DIO1.
+            </summary>
+            <param name="payloadLength">Receives the length of the received payload.</param>
+            <param name="bufferOffset">Receives the buffer offset of the payload.</param>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.ReadBuffer(System.Byte,System.Byte)">
+            <summary>
+            Reads <paramref name="length" /> bytes from the chip RX buffer starting at <paramref name="offset" />.
+            </summary>
+            <param name="offset">Offset in the RX buffer.</param>
+            <param name="length">Number of bytes to read.</param>
+            <returns>A copy of the received bytes.</returns>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.GetPacketStatus(System.Int32@,System.Single@)">
+            <summary>
+            Gets the signal quality for the last received packet.
+            </summary>
+            <param name="rssi">Receives RSSI in dBm.</param>
+            <param name="snr">Receives SNR in dB.</param>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.HandleRxDone">
+            <summary>
+            Reads IRQ flags, pulls the packet from the buffer, raises <see cref="E:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.PacketReceived" />, then returns to RX mode.
+            </summary>
+            <returns>A <see cref="T:Iot.Device.LoRa.LoRaMessage" /> on success; null on CRC error or timeout.</returns>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.StartPolling">
+            <inheritdoc/>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.StopPolling">
+            <inheritdoc/>
+        </member>
+        <member name="P:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.IsDio1High">
+            <summary>
+            Gets a value indicating whether DIO1 is high (an IRQ is pending).
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.GetIrqStatus">
+            <summary>
+            Gets the current IRQ status flags from the chip.
+            </summary>
+            <returns>The 16-bit IRQ status flags.</returns>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.ClearIrqStatus(System.UInt16)">
+            <summary>
+            Clears IRQ flags after handling.
+            </summary>
+            <param name="mask">Bits to clear in the IRQ status register.</param>
+        </member>
+        <member name="M:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.Dispose">
+            <inheritdoc/>
+        </member>
+        <member name="T:Iot.Device.LoRa.ILoRaDevice">
+            <summary>
+            <para>Abstraction for a LoRa radio transceiver.</para>
+            <para>Implement this interface for each chip variant (SX1262, SX1276, RFM95, and similar).</para>
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.ILoRaDevice.Reset">
+            <summary>
+            <para>Performs a hardware reset and waits for the chip to become ready.</para>
+            <para>Must be the first call after construction.</para>
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.ILoRaDevice.Initialize">
+            <summary>
+            Applies the full initialization sequence. Call once after <see cref="M:Iot.Device.LoRa.ILoRaDevice.Reset" />.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.ILoRaDevice.SetRfFrequency(System.UInt32)">
+            <summary>
+            Sets the RF carrier frequency in Hz (for example 868000000).
+            </summary>
+            <param name="frequencyHz">Carrier frequency in hertz.</param>
+        </member>
+        <member name="M:Iot.Device.LoRa.ILoRaDevice.Send(System.Byte[],System.Int32)">
+            <summary>
+            <para>Sends <paramref name="payload" /> over LoRa, blocking until TxDone or until <paramref name="timeoutMs" /> elapses.</para>
+            <para>Callers must supply a non-null, non-empty payload within the implementation's maximum length (for <see cref="T:Iot.Device.LoRa.Drivers.Sx1262.Sx1262" />, see <see cref="F:Iot.Device.LoRa.Drivers.Sx1262.Sx1262.MaxPayloadLength" />).</para>
+            <para>Do not call from <see cref="E:Iot.Device.LoRa.ILoRaDevice.PacketReceived" /> (the poll thread); implementations throw <see cref="T:System.InvalidOperationException" /> if invoked on that thread.</para>
+            </summary>
+            <param name="payload">The bytes to transmit.</param>
+            <param name="timeoutMs">Maximum time to wait for completion, in milliseconds. Must be greater than zero.</param>
+            <exception cref="T:System.ArgumentNullException">Thrown when <paramref name="payload" /> is null.</exception>
+            <exception cref="T:System.ArgumentException">Thrown when <paramref name="payload" /> is empty or longer than the device maximum.</exception>
+            <exception cref="T:System.ArgumentOutOfRangeException">Thrown when <paramref name="timeoutMs" /> is less than or equal to zero.</exception>
+            <exception cref="T:System.TimeoutException">Thrown when TX does not complete in time.</exception>
+            <exception cref="T:System.InvalidOperationException">Thrown when called from the RX poll thread.</exception>
+        </member>
+        <member name="M:Iot.Device.LoRa.ILoRaDevice.StartPolling">
+            <summary>
+            <para>Starts a background thread that polls for incoming packets and raises <see cref="E:Iot.Device.LoRa.ILoRaDevice.PacketReceived" /> for each valid frame.</para>
+            <para>Wire up <see cref="E:Iot.Device.LoRa.ILoRaDevice.PacketReceived" /> before calling this method.</para>
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.ILoRaDevice.StopPolling">
+            <summary>
+            <para>Signals the poll thread to stop. When called from another thread, blocks until the poll thread exits.</para>
+            <para>When called from the poll thread itself (for example from <see cref="E:Iot.Device.LoRa.ILoRaDevice.PacketReceived" />), returns without blocking; the thread then exits.</para>
+            </summary>
+        </member>
+        <member name="E:Iot.Device.LoRa.ILoRaDevice.PacketReceived">
+            <summary>
+            Raised on the poll thread when a valid packet is received.
+            </summary>
+        </member>
+        <member name="T:Iot.Device.LoRa.LoRaMessage">
+            <summary>
+            Represents a received LoRa packet.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.LoRa.LoRaMessage.Payload">
+            <summary>
+            Gets the raw payload bytes.
+            </summary>
+        </member>
+        <member name="P:Iot.Device.LoRa.LoRaMessage.Rssi">
+            <summary>
+            Gets the signal RSSI in dBm (typically -30 to -120).
+            </summary>
+        </member>
+        <member name="P:Iot.Device.LoRa.LoRaMessage.Snr">
+            <summary>
+            Gets the signal-to-noise ratio in dB.
+            </summary>
+        </member>
+        <member name="M:Iot.Device.LoRa.LoRaMessage.#ctor(System.Byte[],System.Int32,System.Single)">
+            <summary>
+            Initializes a new instance of the <see cref="T:Iot.Device.LoRa.LoRaMessage" /> class.
+            </summary>
+            <param name="payload">The received payload bytes.</param>
+            <param name="rssi">The measured RSSI in dBm.</param>
+            <param name="snr">The measured SNR in dB.</param>
+        </member>
+        <member name="T:Iot.Device.LoRa.PacketReceivedHandler">
+            <summary>
+            <para>Represents the method that will handle packet received events.</para>
+            <para>.NET nanoFramework does not support generic delegates such as <c>EventHandler&lt;T&gt;</c>, so a custom non-generic delegate is used instead.</para>
+            </summary>
+            <param name="sender">The source of the event.</param>
+            <param name="message">The received message.</param>
+        </member>
+    </members>
+</doc>

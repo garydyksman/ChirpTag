@@ -2,7 +2,7 @@
 {
     public interface IPacketBuilder
     {
-        IPacket Heartbeat(byte deviceId);
+        IPacket Heartbeat(byte deviceId, byte deviceType);
         IPacket Attack(byte deviceId, byte targetId);
         IPacket AttackAck(byte deviceId, byte targetId, byte combatScore);
         IPacket CombatResult(byte deviceId, byte targetId, byte winnerId);
@@ -13,7 +13,8 @@
         IPacket RespawnReq(byte deviceId, byte flagNodeId);
         IPacket RespawnAck(byte flagNodeId, byte targetId, byte newCombatNumber);
         IPacket GameStart(byte gmNodeId);
-        IPacket GameEnd(byte gmNodeId, byte winnerId);
+        IPacket GameEnd(byte gmNodeId, byte winnerId, byte gameId);
+        IPacket DeliverAck(byte flagNodeId, byte targetDeviceId, bool accepted);
     }
 
 }

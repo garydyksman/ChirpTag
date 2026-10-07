@@ -15,6 +15,9 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         // ---- Full refresh screens ----
         void RenderHud(HudData data);
         void RenderHud(HudData data, string[] targets, int count, int selectedIndex);
+        void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi);
+        void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes);
+        void RenderHud(HudData data, string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes, string[] targetTeams, bool showRssi);
         void ShowCombat(string targetName, byte myScore);
         void ShowCombatResult(bool won, string targetName);
         void ShowDead(byte lives);
@@ -25,6 +28,12 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         void UpdateCombatScore(byte value);       // was UpdateCombatNumber
         void UpdateHeartbeat();
         void UpdateCombatList(string[] targets, int count, int selectedIndex);
+        void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi);
+        void UpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes);
+
+        // ---- Non-blocking UiLoop variants (return false if display lock is held) ----
+        bool TryUpdateCombatList(string[] targets, int count, int selectedIndex, int[] targetRssi, byte[] targetTypes);
+        bool TryUpdateHeartbeat();
 
         // ---- Combat bar ----
         void UpdateCombatBar(int second, int totalSeconds);

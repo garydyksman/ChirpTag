@@ -4,18 +4,17 @@ namespace IOD.CaptureTheFlag.NanoFramework.Implementations
 {
     public static class DebugLog
     {
-        private static int _sequence;
-        private const string DisplayPrefix = "[Display]";
-
+        /// <summary>Writes one line to the debug transport (no numeric prefix — avoids heap-heavy formatting).</summary>
         public static void Write(string message)
         {
+            if (message == null)
+            {
+                return;
+            }
+
             try
             {
-                if (message == null || !message.StartsWith(DisplayPrefix))
-                    return;
-
-                _sequence++;
-                Debug.WriteLine("[" + _sequence + "] " + message);
+                Debug.WriteLine(message);
             }
             catch
             {

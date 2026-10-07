@@ -12,7 +12,7 @@ namespace IOD.CaptureTheFlag.NanoFramework.Interfaces
         void OnRespawnRequestReceived(byte fromDeviceId);
 
         // ---- LoRa TX ----
-        void SendKeyGrant  (byte targetDeviceId);
+        bool SendKeyGrant  (byte targetDeviceId);
         void SendRespawnAck(byte targetDeviceId, byte newCombatNumber);
 
         // ---- HTTP ----
